@@ -439,7 +439,6 @@
     const BULK_CREATE_USERS_FUNCTION = 'bulk-create-users';
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const STATUS_OPTIONS = ['全部', '待审批', '已通过', '已驳回'];
-    const DELETED_FILE_PREFIX = '__deleted__:';
     const pad = (value) => String(value).padStart(2, '0');
     const parseDateValue = (value) => {
         if (value === null || value === undefined || value === '') return null;
@@ -468,12 +467,6 @@
     const buildDefaultApplyForm = () => ({ grade: 1, subject: '语文', duration: 30, date: getLocalDateTimeInputValue(), content: '' });
     const getRecordTime = (item) => parseDateValue(item?.updated_at || item?.created_at || item?.approval_time || item?.date)?.getTime() || 0;
     const sortRecords = (items = []) => [...items].sort((a, b) => getRecordTime(b) - getRecordTime(a));
-    const isDeletedRecord = (item) => {
-        if (!item) return true;
-        if (item.is_deleted === true) return true;
-        return String(item.file_name || '').startsWith(DELETED_FILE_PREFIX);
-    };
-    const filterDeletedRecords = (items = []) => items.filter((item) => !isDeletedRecord(item));
     const buildStats = (items = []) => ({
         total: items.length,
         pending: items.filter((item) => item.status === '待审批').length,
@@ -553,12 +546,12 @@
 
             const overviewStats = computed(() => buildStats(applications.value));
             const filteredTeacherApplications = computed(() => {
-                let list = sortRecords(filterDeletedRecords(applications.value));
+                let list = sortRecords(applications.value);
                 if (teacherStatusFilter.value !== '全部') list = list.filter((item) => item.status === teacherStatusFilter.value);
                 return list;
             });
             const filteredAdminApplications = computed(() => {
-                let list = sortRecords(filterDeletedRecords(applications.value));
+                let list = sortRecords(applications.value);
                 if (adminStatusFilter.value !== '全部') list = list.filter((item) => item.status === adminStatusFilter.value);
                 const keyword = adminKeyword.value.trim().toLowerCase();
                 if (keyword) {
@@ -613,7 +606,7 @@
                     if (userRole.value === 'teacher') query = query.eq('user_id', currentUser.value.id);
                     const { data, error } = await query;
                     if (error) throw error;
-                    applications.value = sortRecords(filterDeletedRecords(data || []));
+                    applications.value = sortRecords(data || []);
                 } catch (error) {
                     showError('获取申报记录失败', error);
                 } finally {
@@ -802,27 +795,14 @@
                 if (!window.confirm(`确认删除“${recordLabel}”吗？删除后将无法恢复。`)) return;
                 setLoading(true, '删除记录中...');
                 try {
-                    const deletedMarker = `${DELETED_FILE_PREFIX}${item.id}:${Date.now()}`;
-                    const deleteResult = await sbClient.from('applications').delete().eq('id', item.id).select('id');
+                    const deleteResult = await sbClient.rpc('admin_delete_rejected_application', { target_application_id: item.id });
                     if (deleteResult.error) throw deleteResult.error;
-
-                    let hardDeleted = Array.isArray(deleteResult.data) && deleteResult.data.length > 0;
-                    if (!hardDeleted) {
-                        const archiveResult = await sbClient
-                            .from('applications')
-                            .update({ file_name: deletedMarker })
-                            .eq('id', item.id)
-                            .select('id, file_name')
-                            .maybeSingle();
-                        if (archiveResult.error) throw archiveResult.error;
-                        if (!archiveResult.data || archiveResult.data.file_name !== deletedMarker) {
-                            throw new Error('记录未被数据库接受，删除没有真正生效。');
-                        }
+                    if (!deleteResult.data) {
+                        throw new Error('数据库没有返回删除确认，记录未被真正删除。');
                     }
-
                     const verifyResult = await sbClient.from('applications').select('id, file_name').eq('id', item.id).maybeSingle();
                     if (verifyResult.error) throw verifyResult.error;
-                    if (verifyResult.data && verifyResult.data.file_name !== deletedMarker) {
+                    if (verifyResult.data) {
                         throw new Error('记录仍然存在于系统中，删除没有真正完成。');
                     }
                     if (currentApprovingItem.value?.id === item.id) currentApprovingItem.value = null;
