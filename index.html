@@ -300,12 +300,64 @@
                             </div>
                         </div>
 
+                        <div class="bg-white rounded-2xl shadow p-4 border border-[#E7E0D3]">
+                            <div class="flex flex-col gap-4">
+                                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                    <div>
+                                        <h3 class="font-bold text-lg text-ink">批量勾选操作</h3>
+                                        <p class="text-xs text-slate-warm mt-1">支持对当前筛选结果批量通过、驳回、导出已通过 PDF，或删除已驳回记录。</p>
+                                    </div>
+                                    <div class="text-sm font-bold text-china-red">已选 {{ selectedAdminApplications.length }} 条</div>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button @click="toggleSelectAllFilteredAdmin" class="px-3 py-2 rounded-full border border-[#D8D1C2] text-xs font-bold text-slate-warm">{{ allFilteredAdminApplicationsSelected ? `取消全选当前筛选（${filteredAdminApplications.length}）` : `全选当前筛选（${filteredAdminApplications.length}）` }}</button>
+                                    <button @click="selectFilteredAdminByStatus('待审批')" class="px-3 py-2 rounded-full border border-[#D8D1C2] text-xs font-bold text-slate-warm">仅选待审批</button>
+                                    <button @click="selectFilteredAdminByStatus('已通过')" class="px-3 py-2 rounded-full border border-[#D8D1C2] text-xs font-bold text-slate-warm">仅选已通过</button>
+                                    <button @click="selectFilteredAdminByStatus('已驳回')" class="px-3 py-2 rounded-full border border-[#D8D1C2] text-xs font-bold text-slate-warm">仅选已驳回</button>
+                                    <button @click="clearSelectedApplications" class="px-3 py-2 rounded-full border border-[#D8D1C2] text-xs font-bold text-slate-warm">清空勾选</button>
+                                </div>
+                                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                                    <div class="summary-card">
+                                        <div class="text-xs text-slate-warm mb-1">待审批已选</div>
+                                        <div class="font-bold text-yellow-600">{{ selectedPendingApplications.length }}</div>
+                                    </div>
+                                    <div class="summary-card">
+                                        <div class="text-xs text-slate-warm mb-1">已通过已选</div>
+                                        <div class="font-bold text-green-600">{{ selectedApprovedApplications.length }}</div>
+                                    </div>
+                                    <div class="summary-card">
+                                        <div class="text-xs text-slate-warm mb-1">已驳回已选</div>
+                                        <div class="font-bold text-red-500">{{ selectedRejectedApplications.length }}</div>
+                                    </div>
+                                    <div class="summary-card">
+                                        <div class="text-xs text-slate-warm mb-1">当前筛选总数</div>
+                                        <div class="font-bold">{{ filteredAdminApplications.length }}</div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <input v-model="bulkApprovalDateInput" type="datetime-local" class="input-chinese p-3 rounded-xl text-sm" placeholder="批量通过时间">
+                                    <input v-model.trim="bulkRejectReasonInput" type="text" class="input-chinese p-3 rounded-xl text-sm" placeholder="批量驳回原因（批量驳回时必填）">
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <button @click="bulkApproveSelected" :disabled="selectedPendingApplications.length === 0" :class="selectedPendingApplications.length ? 'bg-green-600 text-white py-3 rounded-xl font-bold text-sm' : 'bg-gray-100 text-gray-300 py-3 rounded-xl font-bold text-sm cursor-not-allowed'">批量通过待审批（{{ selectedPendingApplications.length }}）</button>
+                                    <button @click="bulkRejectSelected" :disabled="selectedPendingApplications.length === 0" :class="selectedPendingApplications.length ? 'bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-bold text-sm' : 'bg-gray-100 text-gray-300 py-3 rounded-xl font-bold text-sm cursor-not-allowed'">批量驳回待审批（{{ selectedPendingApplications.length }}）</button>
+                                    <button @click="exportSelectedApprovedPDFs" :disabled="selectedApprovedApplications.length === 0" :class="selectedApprovedApplications.length ? 'border border-gray-300 text-blue-600 py-3 rounded-xl font-bold text-sm' : 'bg-gray-100 text-gray-300 py-3 rounded-xl font-bold text-sm cursor-not-allowed'">导出已选已通过 PDF（{{ selectedApprovedApplications.length }}）</button>
+                                    <button @click="bulkDeleteSelectedRejected" :disabled="selectedRejectedApplications.length === 0" :class="selectedRejectedApplications.length ? 'border border-red-200 text-red-600 bg-white py-3 rounded-xl font-bold text-sm' : 'bg-gray-100 text-gray-300 py-3 rounded-xl font-bold text-sm cursor-not-allowed'">删除已选已驳回（{{ selectedRejectedApplications.length }}）</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="space-y-3">
                             <div v-for="app in filteredAdminApplications" :key="app.id" class="mobile-card border-l-4" :class="adminCardBorderClass(app.status)">
                                 <div class="flex justify-between items-start gap-3 mb-3">
-                                    <div>
-                                        <div class="font-bold text-gray-900">{{ app.teacher_name || '未命名教师' }}</div>
-                                        <div class="text-xs text-gray-400 font-mono break-all mt-1">{{ app.file_name || '未生成编号' }}</div>
+                                    <div class="flex items-start gap-3">
+                                        <label class="pt-1">
+                                            <input type="checkbox" class="h-4 w-4 accent-[#8E354A]" :checked="isApplicationSelected(app.id)" @change="toggleAdminSelection(app.id)">
+                                        </label>
+                                        <div>
+                                            <div class="font-bold text-gray-900">{{ app.teacher_name || '未命名教师' }}</div>
+                                            <div class="text-xs text-gray-400 font-mono break-all mt-1">{{ app.file_name || '未生成编号' }}</div>
+                                        </div>
                                     </div>
                                     <span :class="statusClass(app.status)" class="px-2.5 py-1 rounded-full text-xs font-bold">{{ app.status || '未知状态' }}</span>
                                 </div>
@@ -446,6 +498,28 @@
                                 <p>5. 导入历史作业时，系统会自动补全缺省字段并生成可追踪的文件编号。</p>
                             </div>
                         </div>
+
+                        <div class="bg-white rounded-2xl shadow p-5 border border-[#E7E0D3]">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                                <div>
+                                    <h3 class="font-bold text-lg">最近操作日志</h3>
+                                    <p class="text-xs text-slate-warm mt-1">记录审批、驳回和物理删除动作。主记录删除后，这里仍保留审计痕迹便于追溯。</p>
+                                </div>
+                                <button @click="fetchAuditLogs(true)" class="px-4 py-2 rounded-xl border border-[#D8D1C2] font-bold text-slate-warm text-sm">刷新日志</button>
+                            </div>
+                            <div v-if="auditLogs.length" class="space-y-3">
+                                <div v-for="log in auditLogs" :key="log.id" class="border border-[#E7E0D3] rounded-xl px-4 py-3 bg-[#FCFBF8]">
+                                    <div class="flex justify-between gap-3">
+                                        <div class="font-bold text-sm text-ink">{{ auditActionLabel(log.action) }}</div>
+                                        <div class="text-xs text-slate-warm">{{ formatDateTime(log.created_at) }}</div>
+                                    </div>
+                                    <div class="text-xs text-gray-600 mt-1">操作人：{{ log.actor_name || '未记录' }}</div>
+                                    <div class="text-xs text-gray-600 mt-1 break-all">记录：{{ log.details?.file_name || `#${log.application_id || '--'}` }}</div>
+                                    <div class="text-xs text-slate-warm mt-1">{{ auditLogDescription(log) }}</div>
+                                </div>
+                            </div>
+                            <div v-else class="text-center text-gray-400 py-8 text-sm">暂无操作日志</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -577,8 +651,12 @@
             const teacherStatusFilter = ref('全部');
             const adminStatusFilter = ref('全部');
             const adminKeyword = ref('');
+            const selectedApplicationIds = ref([]);
+            const bulkApprovalDateInput = ref(getLocalDateTimeInputValue());
+            const bulkRejectReasonInput = ref('');
             const pdfExportFilters = ref(buildDefaultPdfExportFilters());
             const tempPdfData = ref(null);
+            const auditLogs = ref([]);
             const subjects = ['语文', '数学', '英语', '物理', '化学', '生物', '政治', '历史', '地理'];
 
             const setLoading = (state, text = '') => {
@@ -632,6 +710,27 @@
             const clearPdfExportDateRange = () => {
                 pdfExportFilters.value.dateFrom = '';
                 pdfExportFilters.value.dateTo = '';
+            };
+            const selectedApplicationIdSet = computed(() => new Set(selectedApplicationIds.value));
+            const isApplicationSelected = (id) => selectedApplicationIdSet.value.has(id);
+            const syncSelectedApplicationIds = (items = applications.value) => {
+                const validIdSet = new Set((items || []).map((item) => item.id));
+                selectedApplicationIds.value = selectedApplicationIds.value.filter((id) => validIdSet.has(id));
+            };
+            const clearSelectedApplications = () => {
+                selectedApplicationIds.value = [];
+            };
+            const toggleAdminSelection = (id) => {
+                const next = new Set(selectedApplicationIds.value);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                selectedApplicationIds.value = Array.from(next);
+            };
+            const replaceSelectedApplications = (ids = []) => {
+                selectedApplicationIds.value = Array.from(new Set(ids.filter(Boolean)));
+            };
+            const selectFilteredAdminByStatus = (status) => {
+                replaceSelectedApplications(filteredAdminApplications.value.filter((item) => item.status === status).map((item) => item.id));
             };
             const buildApprovedSearchText = (item) => [
                 item.teacher_name,
@@ -700,6 +799,42 @@
                 }
                 return list;
             });
+            const selectedAdminApplications = computed(() => {
+                const idSet = selectedApplicationIdSet.value;
+                return applications.value.filter((item) => idSet.has(item.id));
+            });
+            const selectedPendingApplications = computed(() => selectedAdminApplications.value.filter((item) => item.status === '待审批'));
+            const selectedApprovedApplications = computed(() => selectedAdminApplications.value.filter((item) => item.status === '已通过'));
+            const selectedRejectedApplications = computed(() => selectedAdminApplications.value.filter((item) => item.status === '已驳回'));
+            const allFilteredAdminApplicationsSelected = computed(() => {
+                const filteredIds = filteredAdminApplications.value.map((item) => item.id);
+                return filteredIds.length > 0 && filteredIds.every((id) => selectedApplicationIdSet.value.has(id));
+            });
+            const toggleSelectAllFilteredAdmin = () => {
+                const filteredIds = filteredAdminApplications.value.map((item) => item.id);
+                if (!filteredIds.length) return;
+                if (allFilteredAdminApplicationsSelected.value) {
+                    const filteredIdSet = new Set(filteredIds);
+                    selectedApplicationIds.value = selectedApplicationIds.value.filter((id) => !filteredIdSet.has(id));
+                    return;
+                }
+                replaceSelectedApplications([...selectedApplicationIds.value, ...filteredIds]);
+            };
+            const auditActionLabel = (action) => ({
+                approve_application: '审批通过',
+                reject_application: '审批驳回',
+                delete_rejected_application: '删除已驳回记录'
+            }[action] || action || '未知操作');
+            const auditLogDescription = (log) => {
+                const details = log?.details || {};
+                const parts = [];
+                if (details.teacher_name) parts.push(`教师：${details.teacher_name}`);
+                if (details.status) parts.push(`状态：${details.status}`);
+                if (details.rejection_reason) parts.push(`原因：${details.rejection_reason}`);
+                if (details.mode === 'batch') parts.push('来源：批量操作');
+                if (details.scope === 'owner') parts.push('删除人：记录所属教师');
+                return parts.join(' · ') || '无附加说明';
+            };
 
             onMounted(async () => {
                 const { data: { session }, error } = await sbClient.auth.getSession();
@@ -733,7 +868,10 @@
                 try {
                     await fetchCurrentProfile();
                     await fetchApplications(false);
-                    if (userRole.value === 'admin') await fetchUserList(false);
+                    if (userRole.value === 'admin') {
+                        await fetchUserList(false);
+                        await fetchAuditLogs(false);
+                    }
                 } finally {
                     setLoading(false);
                 }
@@ -748,8 +886,28 @@
                     const { data, error } = await query;
                     if (error) throw error;
                     applications.value = sortRecords(data || []);
+                    syncSelectedApplicationIds(applications.value);
                 } catch (error) {
                     showError('获取申报记录失败', error);
+                } finally {
+                    if (showLoadingOverlay) setLoading(false);
+                }
+            };
+
+            const fetchAuditLogs = async (showLoadingOverlay = false) => {
+                if (userRole.value !== 'admin') return;
+                if (showLoadingOverlay) setLoading(true, '同步操作日志...');
+                try {
+                    const { data, error } = await sbClient
+                        .from('operation_logs')
+                        .select('id, application_id, actor_name, action, details, created_at')
+                        .order('created_at', { ascending: false })
+                        .limit(20);
+                    if (error) throw error;
+                    auditLogs.value = data || [];
+                } catch (error) {
+                    auditLogs.value = [];
+                    showError('获取操作日志失败', error);
                 } finally {
                     if (showLoadingOverlay) setLoading(false);
                 }
@@ -832,6 +990,10 @@
                     setCurrentUser(null);
                     applications.value = [];
                     userList.value = [];
+                    auditLogs.value = [];
+                    clearSelectedApplications();
+                    bulkApprovalDateInput.value = getLocalDateTimeInputValue();
+                    bulkRejectReasonInput.value = '';
                     currentTab.value = 'active';
                     teacherStatusFilter.value = '全部';
                     adminStatusFilter.value = '全部';
@@ -889,22 +1051,22 @@
             const updateStatus = async (item, status, options = {}) => {
                 if (!item?.id) return alert('未找到需要更新的记录');
                 const updateTime = normalizeDateTimeInput(options.time || new Date());
-                const updateData = {
-                    status,
-                    approval_time: updateTime,
-                    approver_name: displayUserName(),
-                    rejection_reason: status === '已驳回' ? (options.rejectionReason || '').trim() : null
-                };
                 setLoading(true, '更新审批状态...');
                 try {
-                    const { error } = await sbClient.from('applications').update(updateData).eq('id', item.id);
-                    if (error) throw error;
+                    const statusResult = await sbClient.rpc('admin_change_application_status', {
+                        target_application_id: item.id,
+                        target_status: status,
+                        target_approval_time: updateTime,
+                        target_rejection_reason: status === '已驳回' ? (options.rejectionReason || '').trim() : null
+                    });
+                    if (statusResult.error) throw statusResult.error;
                     showApprovalModal.value = false;
                     showRejectModal.value = false;
                     currentApprovingItem.value = null;
                     currentRejectingItem.value = null;
                     rejectReasonInput.value = '';
                     await fetchApplications(false);
+                    await fetchAuditLogs(false);
                 } catch (error) {
                     showError('更新状态失败', error);
                 } finally {
@@ -953,9 +1115,91 @@
                         rejectReasonInput.value = '';
                     }
                     await fetchApplications(false);
+                    await fetchAuditLogs(false);
                     alert('已从系统中删除该条驳回记录。');
                 } catch (error) {
                     showError('删除记录失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            const bulkApproveSelected = async () => {
+                const targetIds = selectedPendingApplications.value.map((item) => item.id);
+                if (!targetIds.length) return alert('请先勾选待审批记录');
+                const approvalTime = normalizeDateTimeInput(bulkApprovalDateInput.value || new Date());
+                if (!window.confirm(`确认批量通过这 ${targetIds.length} 条待审批记录吗？`)) return;
+                setLoading(true, '批量通过中...');
+                try {
+                    const result = await sbClient.rpc('admin_bulk_change_application_status', {
+                        target_application_ids: targetIds,
+                        target_status: '已通过',
+                        target_approval_time: approvalTime,
+                        target_rejection_reason: null
+                    });
+                    if (result.error) throw result.error;
+                    const updatedIds = Array.isArray(result.data) ? result.data : [];
+                    const skippedCount = targetIds.length - updatedIds.length;
+                    clearSelectedApplications();
+                    await fetchApplications(false);
+                    await fetchAuditLogs(false);
+                    alert(`批量通过完成\n成功：${updatedIds.length} 条${skippedCount > 0 ? `\n跳过：${skippedCount} 条` : ''}`);
+                } catch (error) {
+                    showError('批量通过失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            const bulkRejectSelected = async () => {
+                const targetIds = selectedPendingApplications.value.map((item) => item.id);
+                if (!targetIds.length) return alert('请先勾选待审批记录');
+                const rejectionReason = bulkRejectReasonInput.value.trim();
+                if (!rejectionReason) return alert('请填写批量驳回原因');
+                if (!window.confirm(`确认批量驳回这 ${targetIds.length} 条待审批记录吗？`)) return;
+                setLoading(true, '批量驳回中...');
+                try {
+                    const result = await sbClient.rpc('admin_bulk_change_application_status', {
+                        target_application_ids: targetIds,
+                        target_status: '已驳回',
+                        target_approval_time: getLocalDateTimeInputValue(),
+                        target_rejection_reason: rejectionReason
+                    });
+                    if (result.error) throw result.error;
+                    const updatedIds = Array.isArray(result.data) ? result.data : [];
+                    const skippedCount = targetIds.length - updatedIds.length;
+                    clearSelectedApplications();
+                    bulkRejectReasonInput.value = '';
+                    await fetchApplications(false);
+                    await fetchAuditLogs(false);
+                    alert(`批量驳回完成\n成功：${updatedIds.length} 条${skippedCount > 0 ? `\n跳过：${skippedCount} 条` : ''}`);
+                } catch (error) {
+                    showError('批量驳回失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            const exportSelectedApprovedPDFs = async () => {
+                const exportList = selectedApprovedApplications.value;
+                if (!exportList.length) return alert('请先勾选已通过记录');
+                await exportApprovedPDFArchive(exportList, '已勾选作业公示PDF', { validateFilters: false, useFilters: false });
+            };
+            const bulkDeleteSelectedRejected = async () => {
+                const targetIds = selectedRejectedApplications.value.map((item) => item.id);
+                if (!targetIds.length) return alert('请先勾选已驳回记录');
+                if (!window.confirm(`确认彻底删除这 ${targetIds.length} 条已驳回记录吗？删除后无法恢复。`)) return;
+                setLoading(true, '批量删除中...');
+                try {
+                    const result = await sbClient.rpc('admin_bulk_delete_rejected_applications', {
+                        target_application_ids: targetIds
+                    });
+                    if (result.error) throw result.error;
+                    const deletedIds = Array.isArray(result.data) ? result.data : [];
+                    const skippedCount = targetIds.length - deletedIds.length;
+                    clearSelectedApplications();
+                    await fetchApplications(false);
+                    await fetchAuditLogs(false);
+                    alert(`批量删除完成\n成功：${deletedIds.length} 条${skippedCount > 0 ? `\n跳过：${skippedCount} 条` : ''}`);
+                } catch (error) {
+                    showError('批量删除失败', error);
                 } finally {
                     setLoading(false);
                 }
@@ -1210,18 +1454,21 @@
                 currentTab.value = t;
                 if(t === 'active') await fetchApplications();
                 if(t === 'users') await fetchUserList(true);
+                if(t === 'tools') await fetchAuditLogs(true);
             };
 
             return {
                 currentUser, userRole, authMode, loginForm, signupForm, applyForm,
                 applications, userList, currentTab, isLoading, loadingText, showApprovalModal, showRejectModal, approvalDateInput, rejectReasonInput,
-                tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword,
+                selectedApplicationIds, selectedAdminApplications, selectedPendingApplications, selectedApprovedApplications, selectedRejectedApplications, allFilteredAdminApplicationsSelected,
+                bulkApprovalDateInput, bulkRejectReasonInput, auditLogs, tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword,
                 pdfExportFilters, gradeOptions: GRADE_OPTIONS, pdfDateFieldOptions: PDF_DATE_FIELD_OPTIONS, pdfFolderModeOptions: PDF_FOLDER_MODE_OPTIONS,
                 overviewStats, approvedApplications, filteredApprovedApplications, filteredApprovedSummary, hasPdfExportFiltersApplied, filteredTeacherApplications, filteredAdminApplications,
                 handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,
+                fetchAuditLogs, toggleAdminSelection, isApplicationSelected, toggleSelectAllFilteredAdmin, selectFilteredAdminByStatus, clearSelectedApplications, bulkApproveSelected, bulkRejectSelected, exportSelectedApprovedPDFs, bulkDeleteSelectedRejected,
                 openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, deleteRejectedApplication, generateAndDownloadPDF, exportAllApprovedPDFs, exportFilteredApprovedPDFs, resetPdfExportFilters, setPdfExportRecentDays, clearPdfExportDateRange, copyFileName,
                 statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername,
-                roleLabel, roleBadgeClass, displayDuration, exportExcel, downloadImportTemplate, handleImportExcel,
+                roleLabel, roleBadgeClass, displayDuration, auditActionLabel, auditLogDescription, exportExcel, downloadImportTemplate, handleImportExcel,
                 downloadUserTemplate, handleImportUsers
             };
         }
