@@ -254,9 +254,10 @@
                                 </div>
                                 <div v-else-if="app.status === '待审批'" class="text-xs text-center text-yellow-700 bg-yellow-50 py-2.5 rounded-xl font-semibold">等待管理员审核中</div>
                                 <div v-else class="bg-red-50 border border-red-100 py-3 px-3 rounded-xl">
-                                    <div class="text-xs text-center text-red-600 font-semibold">已驳回，可修改内容后重新提交</div>
+                                    <div class="text-xs text-center text-red-600 font-semibold">已驳回，可修改内容后重新提交或直接删除</div>
                                     <div class="text-xs text-red-700 mt-2">驳回原因：{{ app.rejection_reason || '未填写' }}</div>
                                     <div class="text-xs text-red-500 mt-1">审批人：{{ app.approver_name || '未记录' }}</div>
+                                    <button @click="deleteRejectedApplication(app)" class="w-full mt-3 bg-white text-red-600 border border-red-200 py-2.5 rounded-xl font-bold text-xs shadow-sm active:bg-red-50">删除该条记录</button>
                                 </div>
                             </div>
                         </div>
@@ -322,7 +323,10 @@
                                     <div class="text-xs text-slate-warm">处理时间：{{ formatDateTime(app.approval_time) }} · 审批人：{{ app.approver_name || '未记录' }}</div>
                                     <button v-if="app.status === '已通过'" @click="generateAndDownloadPDF(app)" class="text-blue-600 text-sm font-bold underline">查看 PDF</button>
                                 </div>
-                                <div v-if="app.status === '已驳回'" class="mt-3 text-xs text-red-700 bg-red-50 border border-red-100 rounded-xl px-3 py-2">驳回原因：{{ app.rejection_reason || '未填写' }}</div>
+                                <div v-if="app.status === '已驳回'" class="mt-3 space-y-2">
+                                    <div class="text-xs text-red-700 bg-red-50 border border-red-100 rounded-xl px-3 py-2">驳回原因：{{ app.rejection_reason || '未填写' }}</div>
+                                    <button @click="deleteRejectedApplication(app)" class="w-full bg-white text-red-600 border border-red-200 py-2.5 rounded-xl font-bold text-sm">删除该条记录</button>
+                                </div>
                             </div>
                             <div v-if="filteredAdminApplications.length === 0" class="text-center text-gray-400 py-10 text-sm">当前筛选条件下暂无数据</div>
                         </div>
@@ -785,6 +789,32 @@
                 if (!rejectReasonInput.value.trim()) return alert('请填写驳回原因');
                 await updateStatus(currentRejectingItem.value, '已驳回', { rejectionReason: rejectReasonInput.value, time: new Date() });
             };
+            const deleteRejectedApplication = async (item) => {
+                if (!item?.id) return alert('未找到需要删除的记录');
+                if (item.status !== '已驳回') return alert('仅已驳回的记录可删除');
+                const recordLabel = item.file_name || item.teacher_name || '该条记录';
+                if (!window.confirm(`确认删除“${recordLabel}”吗？删除后将无法恢复。`)) return;
+                setLoading(true, '删除记录中...');
+                try {
+                    let result = await sbClient.from('applications').update({ is_deleted: true }).eq('id', item.id);
+                    if (result.error) {
+                        result = await sbClient.from('applications').delete().eq('id', item.id);
+                    }
+                    if (result.error) throw result.error;
+                    if (currentApprovingItem.value?.id === item.id) currentApprovingItem.value = null;
+                    if (currentRejectingItem.value?.id === item.id) {
+                        currentRejectingItem.value = null;
+                        showRejectModal.value = false;
+                        rejectReasonInput.value = '';
+                    }
+                    await fetchApplications(false);
+                    alert('已删除该条驳回记录。');
+                } catch (error) {
+                    showError('删除记录失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
 
             const generateAndDownloadPDF = async (app) => {
                 setLoading(true, '生成 PDF 中...');
@@ -952,7 +982,7 @@
                 tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword,
                 overviewStats, filteredTeacherApplications, filteredAdminApplications,
                 handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,
-                openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, generateAndDownloadPDF, copyFileName,
+                openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, deleteRejectedApplication, generateAndDownloadPDF, copyFileName,
                 statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername,
                 roleLabel, roleBadgeClass, displayDuration, exportExcel, downloadImportTemplate, handleImportExcel,
                 downloadUserTemplate, handleImportUsers
