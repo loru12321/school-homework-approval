@@ -679,7 +679,7 @@
             };
             const pickReadableText = (...values) => values
                 .map((value) => String(value ?? '').trim())
-                .find((value) => value && !/^\?+$/.test(value)) || '';
+                .find((value) => value && !/^[?？]+$/.test(value)) || '';
             const displayUserName = (user = currentUser.value) => pickReadableText(
                 currentProfile.value?.full_name,
                 user?.user_metadata?.name,
