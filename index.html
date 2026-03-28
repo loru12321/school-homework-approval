@@ -439,6 +439,7 @@
     const BULK_CREATE_USERS_FUNCTION = 'bulk-create-users';
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const STATUS_OPTIONS = ['全部', '待审批', '已通过', '已驳回'];
+    const DELETED_FILE_PREFIX = '__deleted__:';
     const pad = (value) => String(value).padStart(2, '0');
     const parseDateValue = (value) => {
         if (value === null || value === undefined || value === '') return null;
@@ -467,7 +468,12 @@
     const buildDefaultApplyForm = () => ({ grade: 1, subject: '语文', duration: 30, date: getLocalDateTimeInputValue(), content: '' });
     const getRecordTime = (item) => parseDateValue(item?.updated_at || item?.created_at || item?.approval_time || item?.date)?.getTime() || 0;
     const sortRecords = (items = []) => [...items].sort((a, b) => getRecordTime(b) - getRecordTime(a));
-    const filterDeletedRecords = (items = []) => items.filter((item) => item && item.is_deleted !== true);
+    const isDeletedRecord = (item) => {
+        if (!item) return true;
+        if (item.is_deleted === true) return true;
+        return String(item.file_name || '').startsWith(DELETED_FILE_PREFIX);
+    };
+    const filterDeletedRecords = (items = []) => items.filter((item) => !isDeletedRecord(item));
     const buildStats = (items = []) => ({
         total: items.length,
         pending: items.filter((item) => item.status === '待审批').length,
@@ -796,11 +802,29 @@
                 if (!window.confirm(`确认删除“${recordLabel}”吗？删除后将无法恢复。`)) return;
                 setLoading(true, '删除记录中...');
                 try {
-                    let result = await sbClient.from('applications').update({ is_deleted: true }).eq('id', item.id);
-                    if (result.error) {
-                        result = await sbClient.from('applications').delete().eq('id', item.id);
+                    const deletedMarker = `${DELETED_FILE_PREFIX}${item.id}:${Date.now()}`;
+                    const deleteResult = await sbClient.from('applications').delete().eq('id', item.id).select('id');
+                    if (deleteResult.error) throw deleteResult.error;
+
+                    let hardDeleted = Array.isArray(deleteResult.data) && deleteResult.data.length > 0;
+                    if (!hardDeleted) {
+                        const archiveResult = await sbClient
+                            .from('applications')
+                            .update({ file_name: deletedMarker })
+                            .eq('id', item.id)
+                            .select('id, file_name')
+                            .maybeSingle();
+                        if (archiveResult.error) throw archiveResult.error;
+                        if (!archiveResult.data || archiveResult.data.file_name !== deletedMarker) {
+                            throw new Error('记录未被数据库接受，删除没有真正生效。');
+                        }
                     }
-                    if (result.error) throw result.error;
+
+                    const verifyResult = await sbClient.from('applications').select('id, file_name').eq('id', item.id).maybeSingle();
+                    if (verifyResult.error) throw verifyResult.error;
+                    if (verifyResult.data && verifyResult.data.file_name !== deletedMarker) {
+                        throw new Error('记录仍然存在于系统中，删除没有真正完成。');
+                    }
                     if (currentApprovingItem.value?.id === item.id) currentApprovingItem.value = null;
                     if (currentRejectingItem.value?.id === item.id) {
                         currentRejectingItem.value = null;
@@ -808,7 +832,7 @@
                         rejectReasonInput.value = '';
                     }
                     await fetchApplications(false);
-                    alert('已删除该条驳回记录。');
+                    alert('已从系统中删除该条驳回记录。');
                 } catch (error) {
                     showError('删除记录失败', error);
                 } finally {
