@@ -10,6 +10,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <script>
@@ -389,6 +390,7 @@
                             <h3 class="font-bold text-lg mb-4">数据工具</h3>
                             <div class="space-y-3">
                                 <button @click="exportExcel" class="w-full border border-gray-300 py-3 rounded-xl font-bold text-green-700">导出 Excel 汇总表</button>
+                                <button @click="exportAllApprovedPDFs" :disabled="approvedApplications.length === 0" :class="approvedApplications.length ? 'border border-gray-300 py-3 rounded-xl font-bold text-red-600 hover:bg-red-50' : 'border border-gray-200 py-3 rounded-xl font-bold text-gray-300 cursor-not-allowed bg-gray-50'">导出全部已通过 PDF（ZIP）</button>
                                 <button @click="downloadImportTemplate" class="w-full bg-gray-50 text-gray-600 py-2.5 rounded-xl text-sm font-bold">下载作业导入模板</button>
                                 <button @click="$refs.fileInput.click()" class="w-full border border-dashed border-gray-300 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-50">导入历史作业记录</button>
                                 <input type="file" ref="fileInput" accept=".xlsx" class="hidden" @change="handleImportExcel">
@@ -477,6 +479,20 @@
         const stamp = formatDateTime(date).replace(/[-:\s]/g, '').slice(0, 12);
         return `${teacherName}-${grade}年级-${subject}-${stamp || Date.now()}`;
     };
+    const sanitizeFileName = (value, fallback = '作业公示单') => {
+        const safeName = String(value || fallback).replace(/[\\/:*?"<>|]+/g, '_').trim();
+        return safeName || fallback;
+    };
+    const downloadBlobFile = (blob, fileName) => {
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    };
 
     createApp({
         setup() {
@@ -545,6 +561,7 @@
             const resetApplyForm = () => { applyForm.value = buildDefaultApplyForm(); };
 
             const overviewStats = computed(() => buildStats(applications.value));
+            const approvedApplications = computed(() => sortRecords(applications.value).filter((item) => item.status === '已通过'));
             const filteredTeacherApplications = computed(() => {
                 let list = sortRecords(applications.value);
                 if (teacherStatusFilter.value !== '全部') list = list.filter((item) => item.status === teacherStatusFilter.value);
@@ -820,24 +837,71 @@
                 }
             };
 
+            const preparePdfData = (app) => ({
+                ...app,
+                approval_time: app.approval_time || getLocalDateTimeInputValue(),
+                approver_name: app.approver_name || '管理员'
+            });
+
+            const createPdfBlob = async (app) => {
+                tempPdfData.value = preparePdfData(app);
+                await nextTick();
+                await new Promise((resolve) => setTimeout(resolve, 160));
+                const el = document.getElementById('pdf-template');
+                const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+                const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+                pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+                return pdf.output('blob');
+            };
+
             const generateAndDownloadPDF = async (app) => {
                 setLoading(true, '生成 PDF 中...');
                 try {
-                    tempPdfData.value = {
-                        ...app,
-                        approval_time: app.approval_time || getLocalDateTimeInputValue(),
-                        approver_name: app.approver_name || '管理员'
-                    };
-                    await nextTick();
-                    await new Promise((resolve) => setTimeout(resolve, 160));
-                    const el = document.getElementById('pdf-template');
-                    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-                    const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
-                    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
-                    pdf.save(`${app.file_name || '作业公示单'}.pdf`);
+                    const pdfBlob = await createPdfBlob(app);
+                    downloadBlobFile(pdfBlob, `${sanitizeFileName(app.file_name)}.pdf`);
                 } catch (error) {
                     showError('生成 PDF 失败', error);
                 } finally {
+                    tempPdfData.value = null;
+                    setLoading(false);
+                }
+            };
+
+            const exportAllApprovedPDFs = async () => {
+                const exportList = approvedApplications.value;
+                if (!exportList.length) return alert('当前没有可导出的已通过记录');
+                if (!window.JSZip) return alert('PDF 打包组件加载失败，请刷新页面后重试');
+
+                setLoading(true, `准备导出 1/${exportList.length} 份 PDF...`);
+                try {
+                    const zip = new window.JSZip();
+                    const usedNames = new Set();
+
+                    for (let i = 0; i < exportList.length; i++) {
+                        const app = exportList[i];
+                        loadingText.value = `正在生成第 ${i + 1}/${exportList.length} 份 PDF...`;
+                        const pdfBlob = await createPdfBlob(app);
+                        const baseName = sanitizeFileName(app.file_name || `作业公示单_${i + 1}`);
+                        let zipFileName = `${baseName}.pdf`;
+                        let suffix = 2;
+                        while (usedNames.has(zipFileName)) {
+                            zipFileName = `${baseName}_${suffix}.pdf`;
+                            suffix += 1;
+                        }
+                        usedNames.add(zipFileName);
+                        zip.file(zipFileName, pdfBlob);
+                        await new Promise((resolve) => setTimeout(resolve, 0));
+                    }
+
+                    loadingText.value = '正在打包 ZIP 文件...';
+                    const zipBlob = await zip.generateAsync({ type: 'blob' });
+                    const stamp = formatDateTime(new Date()).replace(/[-:\s]/g, '').slice(0, 12);
+                    downloadBlobFile(zipBlob, `作业公示PDF汇总_${stamp || Date.now()}.zip`);
+                    alert(`已打包导出 ${exportList.length} 份 PDF。`);
+                } catch (error) {
+                    showError('导出全部 PDF 失败', error);
+                } finally {
+                    tempPdfData.value = null;
                     setLoading(false);
                 }
             };
@@ -984,9 +1048,9 @@
                 currentUser, userRole, authMode, loginForm, signupForm, applyForm,
                 applications, userList, currentTab, isLoading, loadingText, showApprovalModal, showRejectModal, approvalDateInput, rejectReasonInput,
                 tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword,
-                overviewStats, filteredTeacherApplications, filteredAdminApplications,
+                overviewStats, approvedApplications, filteredTeacherApplications, filteredAdminApplications,
                 handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,
-                openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, deleteRejectedApplication, generateAndDownloadPDF, copyFileName,
+                openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, deleteRejectedApplication, generateAndDownloadPDF, exportAllApprovedPDFs, copyFileName,
                 statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername,
                 roleLabel, roleBadgeClass, displayDuration, exportExcel, downloadImportTemplate, handleImportExcel,
                 downloadUserTemplate, handleImportUsers
