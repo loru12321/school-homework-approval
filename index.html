@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -158,8 +158,8 @@
                 <input v-model.trim="loginForm.account" v-if="authMode==='login'" class="input-chinese w-full px-4 py-3 rounded-xl" placeholder="账号">
                 <input v-if="authMode==='login'" v-model="loginForm.password" type="password" class="input-chinese w-full px-4 py-3 rounded-xl" placeholder="密码">
                 <input v-if="authMode==='signup'" v-model="signupForm.password" type="password" class="input-chinese w-full px-4 py-3 rounded-xl" placeholder="密码（至少 6 位）">
-                <select v-if="authMode==='signup'" v-model="signupForm.role" class="input-chinese w-full px-4 py-3 rounded-xl"><option value="teacher">教师</option><option value="admin">管理员</option></select>
-                <button @click="authMode==='login'?handleLogin():handleSignup()" class="w-full bg-china-red text-white font-bold py-3.5 rounded-xl text-lg shadow-lg shadow-red-100">{{authMode==='login'?'登录系统':'创建账号'}}</button>
+                <p v-if="authMode==='signup'" class="text-xs text-slate-warm leading-6 px-1">为提高安全性，前台注册仅创建教师账号，管理员账号请使用系统初始化或后台导入。</p>
+                <button @click="authMode==='login'?handleLogin():handleSignup()" class="w-full bg-china-red text-white font-bold py-3.5 rounded-xl text-lg shadow-lg shadow-red-100">{{authMode==='login'?'登录系统':'创建教师账号'}}</button>
             </div>
         </div>
     </div>
@@ -478,6 +478,7 @@
     createApp({
         setup() {
             const currentUser = ref(null);
+            const currentProfile = ref(null);
             const userRole = ref('');
             const authMode = ref('login');
             const currentTab = ref('active');
@@ -492,7 +493,7 @@
             const applications = ref([]);
             const userList = ref([]);
             const loginForm = ref({ account: '', password: '' });
-            const signupForm = ref({ username: '', password: '', name: '', role: 'teacher' });
+            const signupForm = ref({ username: '', password: '', name: '' });
             const applyForm = ref(buildDefaultApplyForm());
             const teacherStatusFilter = ref('全部');
             const adminStatusFilter = ref('全部');
@@ -511,11 +512,24 @@
 
             const setCurrentUser = (user) => {
                 currentUser.value = user || null;
-                userRole.value = user?.user_metadata?.role || user?.app_metadata?.role || '';
+                currentProfile.value = null;
+                userRole.value = '';
             };
-
-            const displayUserName = (user = currentUser.value) => user?.user_metadata?.name || user?.user_metadata?.username || user?.email?.split('@')[0] || '未命名用户';
-            const displayProfileName = (profile) => profile?.full_name || profile?.name || profile?.username || '未命名';
+            const applyCurrentProfile = (profile) => {
+                currentProfile.value = profile || null;
+                userRole.value = profile?.role === 'admin' ? 'admin' : 'teacher';
+            };
+            const pickReadableText = (...values) => values
+                .map((value) => String(value ?? '').trim())
+                .find((value) => value && !/^\?+$/.test(value)) || '';
+            const displayUserName = (user = currentUser.value) => pickReadableText(
+                currentProfile.value?.full_name,
+                user?.user_metadata?.name,
+                currentProfile.value?.username,
+                user?.user_metadata?.username,
+                user?.email?.split('@')[0]
+            ) || '未命名用户';
+            const displayProfileName = (profile) => pickReadableText(profile?.full_name, profile?.name, profile?.username) || '未命名';
             const displayProfileUsername = (profile) => profile?.username || profile?.email?.split('@')[0] || '--';
             const roleLabel = (role) => role === 'admin' ? '管理员' : '教师';
             const roleBadgeClass = (role) => role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600';
@@ -552,9 +566,28 @@
                 }
             });
 
+            const fetchCurrentProfile = async () => {
+                if (!currentUser.value?.id) {
+                    applyCurrentProfile(null);
+                    return null;
+                }
+                try {
+                    const { data, error } = await sbClient.from('profiles').select('id, username, full_name, role').eq('id', currentUser.value.id).maybeSingle();
+                    if (error) throw error;
+                    applyCurrentProfile(data || null);
+                    return data || null;
+                } catch (error) {
+                    currentProfile.value = null;
+                    userRole.value = 'teacher';
+                    console.warn('Failed to resolve current profile role.', error);
+                    return null;
+                }
+            };
+
             const initData = async () => {
                 setLoading(true, '加载系统数据...');
                 try {
+                    await fetchCurrentProfile();
                     await fetchApplications(false);
                     if (userRole.value === 'admin') await fetchUserList(false);
                 } finally {
@@ -616,7 +649,7 @@
                 const username = signupForm.value.username.trim();
                 const name = signupForm.value.name.trim();
                 const password = signupForm.value.password;
-                const role = signupForm.value.role;
+                const role = 'teacher';
                 if (!username) return alert('请输入账号');
                 if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) return alert('账号仅支持 3-20 位字母、数字或下划线');
                 if (!name) return alert('请输入真实姓名');
@@ -629,7 +662,7 @@
                         options: { data: { username, name, role } }
                     });
                     if (error) throw error;
-                    signupForm.value = { username: '', password: '', name: '', role: 'teacher' };
+                    signupForm.value = { username: '', password: '', name: '' };
                     loginForm.value.account = username;
                     loginForm.value.password = '';
                     if (data?.session?.user) {
@@ -929,3 +962,4 @@
 </script>
 </body>
 </html>
+

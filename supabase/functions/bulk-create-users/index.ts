@@ -72,7 +72,27 @@ Deno.serve(async (req) => {
       return json(401, { ok: false, error: authError?.message || "登录已失效，请重新登录。" });
     }
 
-    const requesterRole = user.user_metadata?.role ?? user.app_metadata?.role;
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
+    const { data: requesterProfile, error: requesterProfileError } = await adminClient
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (requesterProfileError) {
+      return json(500, {
+        ok: false,
+        error: requesterProfileError.message || "查询管理员身份失败。",
+      });
+    }
+
+    const requesterRole = requesterProfile?.role;
     if (requesterRole !== "admin") {
       return json(403, { ok: false, error: "只有管理员可以批量创建账号。" });
     }
@@ -87,13 +107,6 @@ Deno.serve(async (req) => {
     if (users.length > 200) {
       return json(400, { ok: false, error: "单次最多导入 200 个账号，请分批导入。" });
     }
-
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
 
     const createdUsers: Array<Record<string, string>> = [];
     const failedUsers: Array<Record<string, string>> = [];
@@ -127,6 +140,7 @@ Deno.serve(async (req) => {
         password,
         email_confirm: true,
         user_metadata: { username, name, role },
+        app_metadata: { role },
       });
 
       if (error || !data.user) {
