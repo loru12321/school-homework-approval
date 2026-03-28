@@ -13,7 +13,7 @@
 
 ## 文件
 
-- `教务作业审批系统(1).html`：系统主文件
+- `school-homework-approval.html`：系统主文件
 
 ## 建议继续落地的改进
 
