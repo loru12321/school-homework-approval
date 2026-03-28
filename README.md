@@ -25,6 +25,7 @@ After GitHub Pages is enabled for this repository, the system can be opened at:
 - Added indexes for `applications.user_id` and `applications.status`
 - Closed the public admin self-signup hole in the web UI and changed role resolution to read from `profiles`
 - Updated the bulk-create Edge Function to verify admin permission from `profiles.role` instead of trusting browser-supplied metadata
+- Upgraded bulk PDF export into a browser-side download center with queued ZIP tasks, retry support, and repeat download support
 - Kept the project as a static web app so it can be opened directly by URL after deployment
 
 ## Supabase Deployment
@@ -62,3 +63,4 @@ node scripts/bootstrap-admin.mjs
 
 - The Supabase CLI was not available in the current local environment during development, so the migration and Edge Function files were added to the repository but still need to be deployed in your Supabase project.
 - GitHub Pages serves `index.html` from the repository root, so entering the site URL opens the system directly.
+- PDF export archives are stored in the browser's local IndexedDB download center so finished ZIP files can be downloaded again without regenerating them immediately.

@@ -305,7 +305,7 @@
                                 <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                                     <div>
                                         <h3 class="font-bold text-lg text-ink">批量勾选操作</h3>
-                                        <p class="text-xs text-slate-warm mt-1">支持对当前筛选结果批量通过、驳回、导出已通过 PDF，或删除已驳回记录。</p>
+                                        <p class="text-xs text-slate-warm mt-1">支持对当前筛选结果批量通过、驳回、加入 PDF 下载中心任务，或删除已驳回记录。</p>
                                     </div>
                                     <div class="text-sm font-bold text-china-red">已选 {{ selectedAdminApplications.length }} 条</div>
                                 </div>
@@ -341,7 +341,7 @@
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <button @click="bulkApproveSelected" :disabled="selectedPendingApplications.length === 0" :class="selectedPendingApplications.length ? 'bg-green-600 text-white py-3 rounded-xl font-bold text-sm' : 'bg-gray-100 text-gray-300 py-3 rounded-xl font-bold text-sm cursor-not-allowed'">批量通过待审批（{{ selectedPendingApplications.length }}）</button>
                                     <button @click="bulkRejectSelected" :disabled="selectedPendingApplications.length === 0" :class="selectedPendingApplications.length ? 'bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-bold text-sm' : 'bg-gray-100 text-gray-300 py-3 rounded-xl font-bold text-sm cursor-not-allowed'">批量驳回待审批（{{ selectedPendingApplications.length }}）</button>
-                                    <button @click="exportSelectedApprovedPDFs" :disabled="selectedApprovedApplications.length === 0" :class="selectedApprovedApplications.length ? 'border border-gray-300 text-blue-600 py-3 rounded-xl font-bold text-sm' : 'bg-gray-100 text-gray-300 py-3 rounded-xl font-bold text-sm cursor-not-allowed'">导出已选已通过 PDF（{{ selectedApprovedApplications.length }}）</button>
+                                    <button @click="exportSelectedApprovedPDFs" :disabled="selectedApprovedApplications.length === 0" :class="selectedApprovedApplications.length ? 'border border-gray-300 text-blue-600 py-3 rounded-xl font-bold text-sm' : 'bg-gray-100 text-gray-300 py-3 rounded-xl font-bold text-sm cursor-not-allowed'">加入已选 PDF 下载任务（{{ selectedApprovedApplications.length }}）</button>
                                     <button @click="bulkDeleteSelectedRejected" :disabled="selectedRejectedApplications.length === 0" :class="selectedRejectedApplications.length ? 'border border-red-200 text-red-600 bg-white py-3 rounded-xl font-bold text-sm' : 'bg-gray-100 text-gray-300 py-3 rounded-xl font-bold text-sm cursor-not-allowed'">删除已选已驳回（{{ selectedRejectedApplications.length }}）</button>
                                 </div>
                             </div>
@@ -445,7 +445,7 @@
                                 <div class="border border-[#E7E0D3] rounded-2xl p-4 bg-[#FCFBF8] space-y-4">
                                     <div class="flex flex-col gap-2">
                                         <div class="font-bold text-ink">PDF 条件导出</div>
-                                        <p class="text-xs text-slate-warm">支持按年级、学科、关键词和时间区间筛选，也支持在 ZIP 内按年级、学科或教师自动分文件夹归档。</p>
+                                        <p class="text-xs text-slate-warm">支持按年级、学科、关键词和时间区间筛选，也支持在 ZIP 内按年级、学科或教师自动分文件夹归档。现在会进入下载中心队列，生成完成后可重复下载。</p>
                                     </div>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <select v-model="pdfExportFilters.grade" class="input-chinese p-3 rounded-xl text-sm">
@@ -478,8 +478,8 @@
                                         <div class="text-xs text-slate-warm mt-1">{{ hasPdfExportFiltersApplied ? '当前按钮会按筛选条件导出。' : '当前未设置筛选条件，导出结果等同于全部已通过记录。' }}</div>
                                     </div>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <button @click="exportFilteredApprovedPDFs" :disabled="filteredApprovedApplications.length === 0" :class="filteredApprovedApplications.length ? 'border border-gray-300 py-3 rounded-xl font-bold text-red-600 hover:bg-red-50' : 'border border-gray-200 py-3 rounded-xl font-bold text-gray-300 cursor-not-allowed bg-gray-50'">导出当前筛选 PDF（ZIP）</button>
-                                        <button @click="exportAllApprovedPDFs" :disabled="approvedApplications.length === 0" :class="approvedApplications.length ? 'border border-gray-300 py-3 rounded-xl font-bold text-amber-700 hover:bg-amber-50' : 'border border-gray-200 py-3 rounded-xl font-bold text-gray-300 cursor-not-allowed bg-gray-50'">一键导出全部已通过 PDF（ZIP）</button>
+                                        <button @click="exportFilteredApprovedPDFs" :disabled="filteredApprovedApplications.length === 0" :class="filteredApprovedApplications.length ? 'border border-gray-300 py-3 rounded-xl font-bold text-red-600 hover:bg-red-50' : 'border border-gray-200 py-3 rounded-xl font-bold text-gray-300 cursor-not-allowed bg-gray-50'">加入当前筛选 PDF 任务</button>
+                                        <button @click="exportAllApprovedPDFs" :disabled="approvedApplications.length === 0" :class="approvedApplications.length ? 'border border-gray-300 py-3 rounded-xl font-bold text-amber-700 hover:bg-amber-50' : 'border border-gray-200 py-3 rounded-xl font-bold text-gray-300 cursor-not-allowed bg-gray-50'">加入全部已通过 PDF 任务</button>
                                     </div>
                                 </div>
                                 <button @click="downloadImportTemplate" class="w-full bg-gray-50 text-gray-600 py-2.5 rounded-xl text-sm font-bold">下载作业导入模板</button>
@@ -489,13 +489,77 @@
                         </div>
 
                         <div class="bg-white rounded-2xl shadow p-5 border border-[#E7E0D3]">
+                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                                <div>
+                                    <h3 class="font-bold text-lg">PDF 下载中心</h3>
+                                    <p class="text-xs text-slate-warm mt-1">大批量导出改为队列任务，生成完成后支持再次下载 ZIP，也可以清理历史记录。</p>
+                                </div>
+                                <button @click="clearFinishedPdfExportJobs" :disabled="!pdfExportJobStats.clearable" :class="pdfExportJobStats.clearable ? 'px-4 py-2 rounded-xl border border-[#D8D1C2] font-bold text-slate-warm text-sm' : 'px-4 py-2 rounded-xl border border-gray-200 font-bold text-gray-300 text-sm cursor-not-allowed bg-gray-50'">清理已结束任务</button>
+                            </div>
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-4">
+                                <div class="summary-card">
+                                    <div class="text-xs text-slate-warm mb-1">运行中</div>
+                                    <div class="font-bold text-blue-600">{{ pdfExportJobStats.running }}</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="text-xs text-slate-warm mb-1">排队中</div>
+                                    <div class="font-bold text-amber-700">{{ pdfExportJobStats.queued }}</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="text-xs text-slate-warm mb-1">已完成</div>
+                                    <div class="font-bold text-green-600">{{ pdfExportJobStats.completed }}</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="text-xs text-slate-warm mb-1">失败 / 取消</div>
+                                    <div class="font-bold text-red-500">{{ pdfExportJobStats.failedOrCancelled }}</div>
+                                </div>
+                            </div>
+                            <div v-if="activePdfExportJob" class="bg-[#FCFBF8] border border-[#E7E0D3] rounded-2xl p-4 mb-4">
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div>
+                                        <div class="font-bold text-ink">当前任务：{{ activePdfExportJob.modeLabel }}</div>
+                                        <div class="text-xs text-slate-warm mt-1">{{ pdfExportJobProgressText(activePdfExportJob) }}</div>
+                                    </div>
+                                    <span :class="pdfExportJobStatusClass(activePdfExportJob)" class="px-3 py-1 rounded-full text-xs font-bold self-start">{{ pdfExportJobStatusLabel(activePdfExportJob) }}</span>
+                                </div>
+                                <div class="mt-3 h-2 rounded-full bg-[#EEE7DB] overflow-hidden">
+                                    <div class="h-full bg-blue-500 rounded-full transition-all duration-300" :style="{ width: `${pdfExportJobProgressPercent(activePdfExportJob)}%` }"></div>
+                                </div>
+                            </div>
+                            <div v-if="pdfExportJobs.length" class="space-y-3">
+                                <div v-for="job in pdfExportJobs" :key="job.id" class="border border-[#E7E0D3] rounded-2xl p-4 bg-[#FCFBF8]">
+                                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <div class="font-bold text-ink break-words">{{ job.modeLabel }}</div>
+                                            <div class="text-xs text-slate-warm mt-1">{{ formatDateTime(job.createdAt) }} · {{ job.totalCount }} 份 PDF · {{ job.filterSummary || '未附加筛选' }}</div>
+                                            <div class="text-xs text-slate-warm mt-1">{{ pdfExportJobProgressText(job) }}</div>
+                                        </div>
+                                        <span :class="pdfExportJobStatusClass(job)" class="px-3 py-1 rounded-full text-xs font-bold self-start">{{ pdfExportJobStatusLabel(job) }}</span>
+                                    </div>
+                                    <div class="mt-3 h-2 rounded-full bg-[#EEE7DB] overflow-hidden">
+                                        <div class="h-full rounded-full transition-all duration-300" :class="job.status === 'completed' ? 'bg-green-500' : job.status === 'failed' || job.status === 'cancelled' ? 'bg-red-400' : 'bg-blue-500'" :style="{ width: `${pdfExportJobProgressPercent(job)}%` }"></div>
+                                    </div>
+                                    <div v-if="job.errorMessage" class="mt-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{{ job.errorMessage }}</div>
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        <button v-if="job.status === 'completed'" @click="downloadPdfExportJobArchive(job)" class="px-3 py-2 rounded-xl bg-green-600 text-white text-xs font-bold">下载 ZIP</button>
+                                        <button v-if="job.status === 'queued' || job.status === 'running'" @click="cancelPdfExportJob(job)" class="px-3 py-2 rounded-xl border border-red-200 text-red-600 bg-white text-xs font-bold">{{ job.status === 'running' ? '停止任务' : '取消排队' }}</button>
+                                        <button v-if="job.status === 'failed' || job.status === 'cancelled' || job.status === 'completed'" @click="retryPdfExportJob(job)" class="px-3 py-2 rounded-xl border border-[#D8D1C2] text-slate-warm bg-white text-xs font-bold">重新生成</button>
+                                        <button v-if="job.status !== 'running'" @click="removePdfExportJob(job)" class="px-3 py-2 rounded-xl border border-gray-200 text-gray-500 bg-white text-xs font-bold">删除记录</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-else class="text-center text-gray-400 py-8 text-sm">暂无 PDF 导出任务</div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl shadow p-5 border border-[#E7E0D3]">
                             <h3 class="font-bold text-lg mb-3">操作提醒</h3>
                             <div class="space-y-2 text-sm text-slate-warm">
                                 <p>1. 审批通过后，教师可直接下载公示 PDF，不再跳转第三方网盘。</p>
                                 <p>2. 批量创建账号已迁移到 Supabase Edge Function，前端不再要求输入 Service Role Key。</p>
                                 <p>3. 审批记录现在支持审批人和驳回原因，便于追溯。</p>
                                 <p>4. 批量 PDF 导出支持按年级、学科、关键词、时间区间组合筛选，还可在 ZIP 中按年级 / 学科 / 教师自动分目录。</p>
-                                <p>5. 导入历史作业时，系统会自动补全缺省字段并生成可追踪的文件编号。</p>
+                                <p>5. 批量 PDF 导出已升级为下载中心队列，生成完成后支持重复下载与失败重试。</p>
+                                <p>6. 导入历史作业时，系统会自动补全缺省字段并生成可追踪的文件编号。</p>
                             </div>
                         </div>
 
@@ -566,6 +630,10 @@
         { value: 'grade_subject', label: '按年级 / 学科分文件夹' },
         { value: 'teacher', label: '按教师分文件夹' }
     ];
+    const PDF_EXPORT_DB_NAME = 'homework-approval-download-center';
+    const PDF_EXPORT_DB_VERSION = 1;
+    const PDF_EXPORT_JOB_STORE = 'pdf_export_jobs';
+    const PDF_EXPORT_ARCHIVE_STORE = 'pdf_export_archives';
     const pad = (value) => String(value).padStart(2, '0');
     const parseDateValue = (value) => {
         if (value === null || value === undefined || value === '') return null;
@@ -627,6 +695,74 @@
         link.remove();
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     };
+    let pdfExportDbPromise = null;
+    const requestToPromise = (request) => new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('本地导出存储读取失败'));
+    });
+    const waitForTransaction = (transaction) => new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error || new Error('本地导出存储写入失败'));
+        transaction.onabort = () => reject(transaction.error || new Error('本地导出存储操作已中止'));
+    });
+    const openPdfExportDb = () => {
+        if (!window.indexedDB) return Promise.reject(new Error('当前浏览器不支持下载中心本地存储'));
+        if (pdfExportDbPromise) return pdfExportDbPromise;
+        pdfExportDbPromise = new Promise((resolve, reject) => {
+            const request = window.indexedDB.open(PDF_EXPORT_DB_NAME, PDF_EXPORT_DB_VERSION);
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains(PDF_EXPORT_JOB_STORE)) {
+                    db.createObjectStore(PDF_EXPORT_JOB_STORE, { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains(PDF_EXPORT_ARCHIVE_STORE)) {
+                    db.createObjectStore(PDF_EXPORT_ARCHIVE_STORE);
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error || new Error('无法打开下载中心本地存储'));
+        });
+        return pdfExportDbPromise;
+    };
+    const listStoredPdfExportJobs = async () => {
+        const db = await openPdfExportDb();
+        const transaction = db.transaction(PDF_EXPORT_JOB_STORE, 'readonly');
+        const records = await requestToPromise(transaction.objectStore(PDF_EXPORT_JOB_STORE).getAll());
+        await waitForTransaction(transaction);
+        return Array.isArray(records) ? records : [];
+    };
+    const saveStoredPdfExportJob = async (job) => {
+        const db = await openPdfExportDb();
+        const transaction = db.transaction(PDF_EXPORT_JOB_STORE, 'readwrite');
+        transaction.objectStore(PDF_EXPORT_JOB_STORE).put(job);
+        await waitForTransaction(transaction);
+        return job;
+    };
+    const removeStoredPdfExportJob = async (jobId) => {
+        const db = await openPdfExportDb();
+        const transaction = db.transaction(PDF_EXPORT_JOB_STORE, 'readwrite');
+        transaction.objectStore(PDF_EXPORT_JOB_STORE).delete(jobId);
+        await waitForTransaction(transaction);
+    };
+    const readStoredPdfExportArchive = async (jobId) => {
+        const db = await openPdfExportDb();
+        const transaction = db.transaction(PDF_EXPORT_ARCHIVE_STORE, 'readonly');
+        const blob = await requestToPromise(transaction.objectStore(PDF_EXPORT_ARCHIVE_STORE).get(jobId));
+        await waitForTransaction(transaction);
+        return blob || null;
+    };
+    const saveStoredPdfExportArchive = async (jobId, blob) => {
+        const db = await openPdfExportDb();
+        const transaction = db.transaction(PDF_EXPORT_ARCHIVE_STORE, 'readwrite');
+        transaction.objectStore(PDF_EXPORT_ARCHIVE_STORE).put(blob, jobId);
+        await waitForTransaction(transaction);
+    };
+    const removeStoredPdfExportArchive = async (jobId) => {
+        const db = await openPdfExportDb();
+        const transaction = db.transaction(PDF_EXPORT_ARCHIVE_STORE, 'readwrite');
+        transaction.objectStore(PDF_EXPORT_ARCHIVE_STORE).delete(jobId);
+        await waitForTransaction(transaction);
+    };
 
     createApp({
         setup() {
@@ -656,8 +792,10 @@
             const bulkRejectReasonInput = ref('');
             const pdfExportFilters = ref(buildDefaultPdfExportFilters());
             const tempPdfData = ref(null);
+            const pdfExportJobs = ref([]);
             const auditLogs = ref([]);
             const subjects = ['语文', '数学', '英语', '物理', '化学', '生物', '政治', '历史', '地理'];
+            let isPdfExportQueueRunning = false;
 
             const setLoading = (state, text = '') => {
                 isLoading.value = state;
@@ -710,6 +848,154 @@
             const clearPdfExportDateRange = () => {
                 pdfExportFilters.value.dateFrom = '';
                 pdfExportFilters.value.dateTo = '';
+            };
+            const generatePdfExportJobId = () => window.crypto?.randomUUID?.() || `pdf-export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const snapshotPdfExportFilters = (source = pdfExportFilters.value, overrides = {}) => ({
+                ...buildDefaultPdfExportFilters(),
+                ...(source || {}),
+                ...(overrides || {})
+            });
+            const buildPdfExportFilterSummary = (filters = pdfExportFilters.value, useFilters = true) => {
+                const summaryParts = [];
+                const snapshot = snapshotPdfExportFilters(filters);
+                if (useFilters) {
+                    if (snapshot.grade !== '全部') summaryParts.push(`${snapshot.grade}年级`);
+                    if (snapshot.subject !== '全部') summaryParts.push(snapshot.subject);
+                    if (String(snapshot.keyword || '').trim()) summaryParts.push('关键词筛选');
+                    if (snapshot.dateFrom || snapshot.dateTo) summaryParts.push(snapshot.dateField === 'approval_time' ? '审批区间' : '布置区间');
+                }
+                if (!summaryParts.length) summaryParts.push('全部已通过');
+                const folderLabel = PDF_FOLDER_MODE_OPTIONS.find((option) => option.value === snapshot.folderMode)?.label || 'ZIP 平铺命名';
+                summaryParts.push(folderLabel);
+                return summaryParts.join(' · ');
+            };
+            const buildPdfExportJobItems = (items = []) => items.map((item) => ({
+                id: item.id,
+                teacher_name: item.teacher_name || '',
+                file_name: item.file_name || '',
+                grade: item.grade || '',
+                subject: item.subject || '',
+                duration: item.duration || '',
+                date: item.date || '',
+                content: item.content || '',
+                approval_time: item.approval_time || '',
+                approver_name: item.approver_name || ''
+            }));
+            const sortPdfExportJobs = (items = []) => [...items].sort((a, b) => {
+                const left = parseDateValue(a?.updatedAt || a?.createdAt)?.getTime() || 0;
+                const right = parseDateValue(b?.updatedAt || b?.createdAt)?.getTime() || 0;
+                return right - left;
+            });
+            const normalizePdfExportJob = (job = {}) => {
+                const filterSnapshot = snapshotPdfExportFilters(job.filterSnapshot, { folderMode: job.folderMode || job.filterSnapshot?.folderMode || 'flat' });
+                const items = buildPdfExportJobItems(Array.isArray(job.items) ? job.items : []);
+                const totalCount = Math.max(0, Number(job.totalCount) || items.length);
+                const normalized = {
+                    id: String(job.id || generatePdfExportJobId()),
+                    modeLabel: String(job.modeLabel || '作业公示 PDF'),
+                    status: ['queued', 'running', 'completed', 'failed', 'cancelled'].includes(job.status) ? job.status : 'queued',
+                    createdAt: job.createdAt || new Date().toISOString(),
+                    startedAt: job.startedAt || null,
+                    finishedAt: job.finishedAt || null,
+                    updatedAt: job.updatedAt || job.finishedAt || job.startedAt || job.createdAt || new Date().toISOString(),
+                    totalCount,
+                    completedCount: Math.max(0, Math.min(totalCount, Number(job.completedCount) || 0)),
+                    archiveName: String(job.archiveName || ''),
+                    filterSnapshot,
+                    filterSummary: String(job.filterSummary || buildPdfExportFilterSummary(filterSnapshot, job.useFilters !== false)),
+                    folderMode: filterSnapshot.folderMode,
+                    items,
+                    useFilters: job.useFilters !== false,
+                    progressText: String(job.progressText || ''),
+                    errorMessage: String(job.errorMessage || ''),
+                    autoDownload: job.autoDownload !== false,
+                    cancelRequested: Boolean(job.cancelRequested)
+                };
+                normalized.archiveName = normalized.archiveName || buildPdfArchiveName(normalized.modeLabel, normalized.totalCount, normalized.useFilters, normalized.filterSnapshot);
+                if (normalized.status === 'running') {
+                    normalized.status = 'queued';
+                    normalized.startedAt = null;
+                    normalized.finishedAt = null;
+                    normalized.updatedAt = new Date().toISOString();
+                    normalized.completedCount = 0;
+                    normalized.progressText = '页面刷新后任务已重新排队';
+                    normalized.errorMessage = '';
+                    normalized.cancelRequested = false;
+                }
+                return normalized;
+            };
+            const setPdfExportJobs = (jobs = []) => {
+                pdfExportJobs.value = sortPdfExportJobs(jobs.map((job) => normalizePdfExportJob(job)));
+            };
+            const upsertPdfExportJobLocal = (job) => {
+                const normalized = normalizePdfExportJob(job);
+                setPdfExportJobs([...pdfExportJobs.value.filter((item) => item.id !== normalized.id), normalized]);
+                return normalized;
+            };
+            const removePdfExportJobLocal = (jobId) => {
+                pdfExportJobs.value = pdfExportJobs.value.filter((item) => item.id !== jobId);
+            };
+            const persistPdfExportJob = async (job) => {
+                const normalized = upsertPdfExportJobLocal(job);
+                await saveStoredPdfExportJob(normalized);
+                return normalized;
+            };
+            const removePersistedPdfExportJob = async (jobId) => {
+                removePdfExportJobLocal(jobId);
+                await removeStoredPdfExportJob(jobId);
+            };
+            const activePdfExportJob = computed(() => pdfExportJobs.value.find((job) => job.status === 'running') || null);
+            const pdfExportJobStats = computed(() => ({
+                running: pdfExportJobs.value.filter((job) => job.status === 'running').length,
+                queued: pdfExportJobs.value.filter((job) => job.status === 'queued').length,
+                completed: pdfExportJobs.value.filter((job) => job.status === 'completed').length,
+                failedOrCancelled: pdfExportJobs.value.filter((job) => job.status === 'failed' || job.status === 'cancelled').length,
+                clearable: pdfExportJobs.value.some((job) => job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled')
+            }));
+            const pdfExportJobStatusLabel = (job) => ({
+                queued: '排队中',
+                running: job?.cancelRequested ? '停止中' : '生成中',
+                completed: '已完成',
+                failed: '失败',
+                cancelled: '已取消'
+            }[job?.status] || '未知状态');
+            const pdfExportJobStatusClass = (job) => ({
+                queued: 'bg-amber-50 text-amber-700 border border-amber-100',
+                running: 'bg-blue-50 text-blue-700 border border-blue-100',
+                completed: 'bg-green-50 text-green-700 border border-green-100',
+                failed: 'bg-red-50 text-red-600 border border-red-100',
+                cancelled: 'bg-gray-100 text-gray-500 border border-gray-200'
+            }[job?.status] || 'bg-gray-100 text-gray-500 border border-gray-200');
+            const pdfExportJobProgressPercent = (job) => {
+                const total = Math.max(1, Number(job?.totalCount) || 0);
+                const completed = Math.max(0, Math.min(total, Number(job?.completedCount) || 0));
+                if (job?.status === 'completed') return 100;
+                if (job?.status === 'failed' || job?.status === 'cancelled') return Math.min(100, Math.round(completed / total * 100));
+                return Math.min(99, Math.round(completed / total * 100));
+            };
+            const pdfExportJobProgressText = (job) => {
+                if (!job) return '暂无任务';
+                if (job.progressText) return job.progressText;
+                if (job.status === 'completed') return `已生成 ${job.totalCount}/${job.totalCount} 份 PDF，可直接下载 ZIP。`;
+                if (job.status === 'failed') return `生成中断，已完成 ${job.completedCount}/${job.totalCount} 份。`;
+                if (job.status === 'cancelled') return `任务已取消，停止于 ${job.completedCount}/${job.totalCount} 份。`;
+                if (job.status === 'queued') return `等待处理，计划生成 ${job.totalCount} 份 PDF。`;
+                return `正在生成 ${job.completedCount}/${job.totalCount} 份 PDF。`;
+            };
+            const hydratePdfExportJobs = async () => {
+                try {
+                    const storedJobs = await listStoredPdfExportJobs();
+                    const normalizedJobs = storedJobs.map((job) => normalizePdfExportJob(job));
+                    setPdfExportJobs(normalizedJobs);
+                    for (const job of normalizedJobs) {
+                        await saveStoredPdfExportJob(job);
+                    }
+                } catch (error) {
+                    pdfExportJobs.value = [];
+                    console.warn('Failed to hydrate PDF export jobs.', error);
+                } finally {
+                    void ensurePdfExportQueueProcessing();
+                }
             };
             const selectedApplicationIdSet = computed(() => new Set(selectedApplicationIds.value));
             const isApplicationSelected = (id) => selectedApplicationIdSet.value.has(id);
@@ -837,6 +1123,7 @@
             };
 
             onMounted(async () => {
+                await hydratePdfExportJobs();
                 const { data: { session }, error } = await sbClient.auth.getSession();
                 if (error) return showError('读取登录状态失败', error);
                 if (session?.user) {
@@ -1180,7 +1467,7 @@
             const exportSelectedApprovedPDFs = async () => {
                 const exportList = selectedApprovedApplications.value;
                 if (!exportList.length) return alert('请先勾选已通过记录');
-                await exportApprovedPDFArchive(exportList, '已勾选作业公示PDF', { validateFilters: false, useFilters: false });
+                await queuePdfExportJob(exportList, '已勾选作业公示PDF', { validateFilters: false, useFilters: false });
             };
             const bulkDeleteSelectedRejected = async () => {
                 const targetIds = selectedRejectedApplications.value.map((item) => item.id);
@@ -1223,6 +1510,9 @@
             };
 
             const generateAndDownloadPDF = async (app) => {
+                if (pdfExportJobs.value.some((job) => job.status === 'queued' || job.status === 'running')) {
+                    return alert('当前下载中心有 PDF 导出任务，请稍后再下载单个 PDF。');
+                }
                 setLoading(true, '生成 PDF 中...');
                 try {
                     const pdfBlob = await createPdfBlob(app);
@@ -1235,9 +1525,10 @@
                 }
             };
 
-            const validatePdfExportFilters = () => {
-                const dateFrom = parseDateValue(pdfExportFilters.value.dateFrom)?.getTime() || null;
-                const dateTo = parseDateValue(pdfExportFilters.value.dateTo)?.getTime() || null;
+            const validatePdfExportFilters = (filters = pdfExportFilters.value) => {
+                const snapshot = snapshotPdfExportFilters(filters);
+                const dateFrom = parseDateValue(snapshot.dateFrom)?.getTime() || null;
+                const dateTo = parseDateValue(snapshot.dateTo)?.getTime() || null;
                 if (dateFrom && dateTo && dateFrom > dateTo) {
                     alert('导出时间区间填写有误，开始时间不能晚于结束时间。');
                     return false;
@@ -1258,64 +1549,251 @@
                 return [...folderParts, fileName].join('/');
             };
 
-            const buildPdfArchiveName = (modeLabel, exportCount, useFilters = true) => {
-                const filters = pdfExportFilters.value;
+            const buildPdfArchiveName = (modeLabel, exportCount, useFilters = true, filters = pdfExportFilters.value) => {
+                const snapshot = snapshotPdfExportFilters(filters);
                 const nameParts = [modeLabel];
                 if (useFilters) {
-                    if (filters.grade !== '全部') nameParts.push(`${filters.grade}年级`);
-                    if (filters.subject !== '全部') nameParts.push(filters.subject);
-                    if (String(filters.keyword || '').trim()) nameParts.push('关键词筛选');
-                    if (filters.dateFrom || filters.dateTo) nameParts.push(filters.dateField === 'approval_time' ? '审批区间' : '布置区间');
+                    if (snapshot.grade !== '全部') nameParts.push(`${snapshot.grade}年级`);
+                    if (snapshot.subject !== '全部') nameParts.push(snapshot.subject);
+                    if (String(snapshot.keyword || '').trim()) nameParts.push('关键词筛选');
+                    if (snapshot.dateFrom || snapshot.dateTo) nameParts.push(snapshot.dateField === 'approval_time' ? '审批区间' : '布置区间');
                 }
                 nameParts.push(`${exportCount}份`);
                 nameParts.push(formatDateTime(new Date()).replace(/[-:\s]/g, '').slice(0, 12) || Date.now());
                 return `${nameParts.join('_')}.zip`;
             };
 
-            const exportApprovedPDFArchive = async (exportList, modeLabel, options = {}) => {
-                if (!exportList.length) return alert('当前没有可导出的 PDF 记录');
-                if (!window.JSZip) return alert('PDF 打包组件加载失败，请刷新页面后重试');
-                if (options.validateFilters !== false && !validatePdfExportFilters()) return;
+            const runPdfExportJob = async (jobId) => {
+                const sourceJob = pdfExportJobs.value.find((item) => item.id === jobId);
+                if (!sourceJob || sourceJob.status !== 'queued') return;
 
-                setLoading(true, `准备导出 1/${exportList.length} 份 PDF...`);
+                let runningJob = await persistPdfExportJob({
+                    ...sourceJob,
+                    status: 'running',
+                    startedAt: new Date().toISOString(),
+                    finishedAt: null,
+                    updatedAt: new Date().toISOString(),
+                    completedCount: 0,
+                    progressText: `准备生成 1/${sourceJob.totalCount} 份 PDF...`,
+                    errorMessage: '',
+                    cancelRequested: false
+                });
+
                 try {
                     const zip = new window.JSZip();
                     const usedPaths = new Set();
 
-                    for (let i = 0; i < exportList.length; i++) {
-                        const app = exportList[i];
-                        loadingText.value = `正在生成第 ${i + 1}/${exportList.length} 份 PDF...`;
+                    for (let i = 0; i < runningJob.items.length; i++) {
+                        const latestJob = pdfExportJobs.value.find((item) => item.id === jobId) || runningJob;
+                        if (latestJob.cancelRequested) {
+                            throw new Error('__PDF_EXPORT_CANCELLED__');
+                        }
+
+                        const app = latestJob.items[i];
                         const pdfBlob = await createPdfBlob(app);
                         const baseName = sanitizeFileName(app.file_name || `作业公示单_${i + 1}`);
-                        let zipPath = buildPdfZipEntryPath(app, pdfExportFilters.value.folderMode, `${baseName}.pdf`);
+                        let zipPath = buildPdfZipEntryPath(app, latestJob.folderMode, `${baseName}.pdf`);
                         let suffix = 2;
                         while (usedPaths.has(zipPath)) {
-                            zipPath = buildPdfZipEntryPath(app, pdfExportFilters.value.folderMode, `${baseName}_${suffix}.pdf`);
+                            zipPath = buildPdfZipEntryPath(app, latestJob.folderMode, `${baseName}_${suffix}.pdf`);
                             suffix += 1;
                         }
                         usedPaths.add(zipPath);
                         zip.file(zipPath, pdfBlob);
+
+                        runningJob = await persistPdfExportJob({
+                            ...latestJob,
+                            status: 'running',
+                            completedCount: i + 1,
+                            updatedAt: new Date().toISOString(),
+                            progressText: i + 1 >= latestJob.totalCount
+                                ? '正在打包 ZIP 文件...'
+                                : `正在生成第 ${i + 2}/${latestJob.totalCount} 份 PDF...`
+                        });
                         await new Promise((resolve) => setTimeout(resolve, 0));
                     }
 
-                    loadingText.value = '正在打包 ZIP 文件...';
-                    const zipBlob = await zip.generateAsync({ type: 'blob' });
-                    downloadBlobFile(zipBlob, buildPdfArchiveName(modeLabel, exportList.length, options.useFilters !== false));
-                    alert(`已打包导出 ${exportList.length} 份 PDF。`);
+                    const zipBlob = await zip.generateAsync({
+                        type: 'blob',
+                        compression: 'DEFLATE',
+                        compressionOptions: { level: 6 }
+                    });
+                    await saveStoredPdfExportArchive(jobId, zipBlob);
+
+                    const completedJob = await persistPdfExportJob({
+                        ...runningJob,
+                        status: 'completed',
+                        finishedAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        completedCount: runningJob.totalCount,
+                        progressText: `已生成 ${runningJob.totalCount} 份 PDF，可下载 ZIP。`,
+                        errorMessage: '',
+                        cancelRequested: false
+                    });
+
+                    if (completedJob.autoDownload) {
+                        downloadBlobFile(zipBlob, completedJob.archiveName);
+                    }
+                    alert(`${completedJob.modeLabel} 已完成，${completedJob.totalCount} 份 PDF 已生成。`);
                 } catch (error) {
-                    showError('导出 PDF 归档失败', error);
+                    await removeStoredPdfExportArchive(jobId).catch(() => null);
+                    const latestJob = pdfExportJobs.value.find((item) => item.id === jobId) || runningJob;
+                    const isCancelled = error?.message === '__PDF_EXPORT_CANCELLED__';
+                    const finalJob = await persistPdfExportJob({
+                        ...latestJob,
+                        status: isCancelled ? 'cancelled' : 'failed',
+                        finishedAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        progressText: isCancelled
+                            ? `任务已取消，停止于 ${latestJob.completedCount}/${latestJob.totalCount} 份。`
+                            : `生成失败，已完成 ${latestJob.completedCount}/${latestJob.totalCount} 份。`,
+                        errorMessage: isCancelled ? '' : (error?.message || '导出 PDF 归档失败'),
+                        cancelRequested: false
+                    });
+                    if (!isCancelled) {
+                        alert(`${finalJob.modeLabel} 生成失败，请在下载中心重试。`);
+                    }
                 } finally {
                     tempPdfData.value = null;
-                    setLoading(false);
+                }
+            };
+
+            const ensurePdfExportQueueProcessing = async () => {
+                if (isPdfExportQueueRunning) return;
+                if (!window.JSZip) return;
+                isPdfExportQueueRunning = true;
+                try {
+                    while (pdfExportJobs.value.some((job) => job.status === 'queued')) {
+                        const nextJob = sortPdfExportJobs(pdfExportJobs.value).find((job) => job.status === 'queued');
+                        if (!nextJob) break;
+                        await runPdfExportJob(nextJob.id);
+                    }
+                } finally {
+                    isPdfExportQueueRunning = false;
+                }
+            };
+
+            const queuePdfExportJob = async (exportList, modeLabel, options = {}) => {
+                if (!exportList.length) return alert('当前没有可导出的 PDF 记录');
+                if (!window.JSZip) return alert('PDF 打包组件加载失败，请刷新页面后重试');
+                const filterSnapshot = snapshotPdfExportFilters(options.filterSnapshot || pdfExportFilters.value);
+                if (options.validateFilters !== false && !validatePdfExportFilters(filterSnapshot)) return;
+                try {
+                    const job = await persistPdfExportJob({
+                        id: generatePdfExportJobId(),
+                        modeLabel,
+                        status: 'queued',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        totalCount: exportList.length,
+                        completedCount: 0,
+                        archiveName: buildPdfArchiveName(modeLabel, exportList.length, options.useFilters !== false, filterSnapshot),
+                        filterSnapshot,
+                        filterSummary: buildPdfExportFilterSummary(filterSnapshot, options.useFilters !== false),
+                        folderMode: filterSnapshot.folderMode,
+                        items: buildPdfExportJobItems(exportList),
+                        useFilters: options.useFilters !== false,
+                        progressText: `等待处理，计划生成 ${exportList.length} 份 PDF。`,
+                        errorMessage: '',
+                        autoDownload: options.autoDownload !== false,
+                        cancelRequested: false
+                    });
+
+                    void ensurePdfExportQueueProcessing();
+                    alert(`${job.modeLabel} 已加入下载中心${activePdfExportJob.value ? '队列' : ''}。`);
+                } catch (error) {
+                    showError('创建 PDF 导出任务失败', error);
+                }
+            };
+
+            const downloadPdfExportJobArchive = async (job) => {
+                try {
+                    const archiveBlob = await readStoredPdfExportArchive(job.id);
+                    if (!archiveBlob) return alert('没有找到该任务的 ZIP 文件，请重新生成。');
+                    downloadBlobFile(archiveBlob, job.archiveName);
+                } catch (error) {
+                    showError('下载 ZIP 失败', error);
+                }
+            };
+
+            const cancelPdfExportJob = async (job) => {
+                if (!job) return;
+                try {
+                    if (job.status === 'queued') {
+                        await persistPdfExportJob({
+                            ...job,
+                            status: 'cancelled',
+                            updatedAt: new Date().toISOString(),
+                            finishedAt: new Date().toISOString(),
+                            progressText: `任务已取消，停止于 ${job.completedCount}/${job.totalCount} 份。`
+                        });
+                        return;
+                    }
+                    if (job.status === 'running') {
+                        await persistPdfExportJob({
+                            ...job,
+                            updatedAt: new Date().toISOString(),
+                            cancelRequested: true,
+                            progressText: '正在停止导出任务...'
+                        });
+                    }
+                } catch (error) {
+                    showError('停止导出任务失败', error);
+                }
+            };
+
+            const retryPdfExportJob = async (job) => {
+                if (!job) return;
+                try {
+                    await removeStoredPdfExportArchive(job.id).catch(() => null);
+                    await persistPdfExportJob({
+                        ...job,
+                        status: 'queued',
+                        createdAt: new Date().toISOString(),
+                        startedAt: null,
+                        finishedAt: null,
+                        updatedAt: new Date().toISOString(),
+                        completedCount: 0,
+                        progressText: `等待处理，计划生成 ${job.totalCount} 份 PDF。`,
+                        errorMessage: '',
+                        cancelRequested: false
+                    });
+                    void ensurePdfExportQueueProcessing();
+                } catch (error) {
+                    showError('重新生成 PDF 失败', error);
+                }
+            };
+
+            const removePdfExportJob = async (job) => {
+                if (!job) return;
+                if (job.status === 'running') return alert('请先停止当前导出任务，再删除记录。');
+                try {
+                    await removeStoredPdfExportArchive(job.id).catch(() => null);
+                    await removePersistedPdfExportJob(job.id);
+                } catch (error) {
+                    showError('删除导出记录失败', error);
+                }
+            };
+
+            const clearFinishedPdfExportJobs = async () => {
+                const removableJobs = pdfExportJobs.value.filter((job) => job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled');
+                if (!removableJobs.length) return;
+                try {
+                    for (const job of removableJobs) {
+                        await removeStoredPdfExportArchive(job.id).catch(() => null);
+                        await removePersistedPdfExportJob(job.id);
+                    }
+                } catch (error) {
+                    showError('清理导出任务失败', error);
                 }
             };
 
             const exportAllApprovedPDFs = async () => {
-                await exportApprovedPDFArchive(approvedApplications.value, '全部已通过作业公示PDF', { validateFilters: false, useFilters: false });
+                await queuePdfExportJob(approvedApplications.value, '全部已通过作业公示PDF', { validateFilters: false, useFilters: false });
             };
 
             const exportFilteredApprovedPDFs = async () => {
-                await exportApprovedPDFArchive(filteredApprovedApplications.value, hasPdfExportFiltersApplied.value ? '筛选作业公示PDF' : '全部已通过作业公示PDF');
+                await queuePdfExportJob(filteredApprovedApplications.value, hasPdfExportFiltersApplied.value ? '筛选作业公示PDF' : '全部已通过作业公示PDF');
             };
 
             const downloadUserTemplate = () => {
@@ -1463,10 +1941,12 @@
                 selectedApplicationIds, selectedAdminApplications, selectedPendingApplications, selectedApprovedApplications, selectedRejectedApplications, allFilteredAdminApplicationsSelected,
                 bulkApprovalDateInput, bulkRejectReasonInput, auditLogs, tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword,
                 pdfExportFilters, gradeOptions: GRADE_OPTIONS, pdfDateFieldOptions: PDF_DATE_FIELD_OPTIONS, pdfFolderModeOptions: PDF_FOLDER_MODE_OPTIONS,
+                pdfExportJobs, activePdfExportJob, pdfExportJobStats,
                 overviewStats, approvedApplications, filteredApprovedApplications, filteredApprovedSummary, hasPdfExportFiltersApplied, filteredTeacherApplications, filteredAdminApplications,
                 handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,
                 fetchAuditLogs, toggleAdminSelection, isApplicationSelected, toggleSelectAllFilteredAdmin, selectFilteredAdminByStatus, clearSelectedApplications, bulkApproveSelected, bulkRejectSelected, exportSelectedApprovedPDFs, bulkDeleteSelectedRejected,
                 openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, deleteRejectedApplication, generateAndDownloadPDF, exportAllApprovedPDFs, exportFilteredApprovedPDFs, resetPdfExportFilters, setPdfExportRecentDays, clearPdfExportDateRange, copyFileName,
+                pdfExportJobStatusLabel, pdfExportJobStatusClass, pdfExportJobProgressPercent, pdfExportJobProgressText, downloadPdfExportJobArchive, cancelPdfExportJob, retryPdfExportJob, removePdfExportJob, clearFinishedPdfExportJobs,
                 statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername,
                 roleLabel, roleBadgeClass, displayDuration, auditActionLabel, auditLogDescription, exportExcel, downloadImportTemplate, handleImportExcel,
                 downloadUserTemplate, handleImportUsers
