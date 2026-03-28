@@ -127,6 +127,18 @@
         </div>
     </div>
 
+    <div v-if="showRejectModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl">
+            <h3 class="text-xl font-bold mb-2">确认驳回</h3>
+            <p class="text-sm text-slate-warm mb-4">请输入驳回原因，教师端会看到这条说明。</p>
+            <textarea v-model.trim="rejectReasonInput" rows="4" class="input-chinese w-full p-3 rounded-xl text-base mb-5 bg-gray-50" placeholder="例如：作业时长超出规范，请调整后重新提交"></textarea>
+            <div class="grid grid-cols-2 gap-3">
+                <button @click="showRejectModal = false" class="px-4 py-3 rounded-xl bg-gray-100 font-bold">取消</button>
+                <button @click="confirmReject" class="px-4 py-3 rounded-xl bg-red-600 text-white font-bold">确认驳回</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 登录页 -->
     <div v-if="!currentUser" class="flex-grow flex items-center justify-center p-4 bg-paper-bg relative">
         <div class="bg-white/95 w-full max-w-sm p-8 rounded-3xl shadow-xl z-10 border border-white">
@@ -228,18 +240,23 @@
                                 </div>
                                 <div class="grid grid-cols-2 gap-2 text-xs text-slate-warm mb-3">
                                     <div>布置时间：{{ formatDateTime(app.date) }}</div>
-                                    <div>审批时间：{{ formatDateTime(app.approval_time) }}</div>
+                                    <div>处理时间：{{ formatDateTime(app.approval_time) }}</div>
                                 </div>
                                 <div class="text-sm text-gray-600 mb-3 bg-[#FBFAF7] p-3 rounded-xl whitespace-pre-wrap break-words">{{ app.content || '暂无内容' }}</div>
                                 <div v-if="app.status === '已通过'" class="bg-green-50 p-3 rounded-xl border border-green-100">
-                                    <div class="text-xs text-green-700 font-bold mb-2">后续操作</div>
+                                    <div class="text-xs text-green-700 font-bold mb-1">后续操作</div>
+                                    <div class="text-[11px] text-green-700/80 mb-2">审批人：{{ app.approver_name || '未记录' }}</div>
                                     <div class="grid grid-cols-2 gap-2">
                                         <button @click="generateAndDownloadPDF(app)" class="bg-white text-gray-700 border border-gray-200 py-2.5 rounded-xl font-bold text-xs shadow-sm active:bg-gray-50">下载 PDF</button>
                                         <button @click="copyFileName(app.file_name)" class="bg-white text-gray-700 border border-gray-200 py-2.5 rounded-xl font-bold text-xs shadow-sm active:bg-gray-50">复制文件编号</button>
                                     </div>
                                 </div>
                                 <div v-else-if="app.status === '待审批'" class="text-xs text-center text-yellow-700 bg-yellow-50 py-2.5 rounded-xl font-semibold">等待管理员审核中</div>
-                                <div v-else class="text-xs text-center text-red-600 bg-red-50 py-2.5 rounded-xl font-semibold">已驳回，可修改内容后重新提交</div>
+                                <div v-else class="bg-red-50 border border-red-100 py-3 px-3 rounded-xl">
+                                    <div class="text-xs text-center text-red-600 font-semibold">已驳回，可修改内容后重新提交</div>
+                                    <div class="text-xs text-red-700 mt-2">驳回原因：{{ app.rejection_reason || '未填写' }}</div>
+                                    <div class="text-xs text-red-500 mt-1">审批人：{{ app.approver_name || '未记录' }}</div>
+                                </div>
                             </div>
                         </div>
                         <div v-else class="text-center text-gray-400 py-10 text-sm">当前筛选条件下暂无申报记录</div>
@@ -298,12 +315,13 @@
                                 <div class="text-sm text-gray-600 bg-[#FBFAF7] p-3 rounded-xl mb-3 whitespace-pre-wrap break-words">{{ app.content || '暂无内容' }}</div>
                                 <div v-if="app.status === '待审批'" class="grid grid-cols-2 gap-2 mt-2">
                                     <button @click="openApprovalModal(app)" class="bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm">通过</button>
-                                    <button @click="updateStatus(app, '已驳回')" class="bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-xl font-bold text-sm">驳回</button>
+                                    <button @click="openRejectModal(app)" class="bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-xl font-bold text-sm">驳回</button>
                                 </div>
                                 <div v-else class="flex justify-between items-center gap-3 mt-2">
-                                    <div class="text-xs text-slate-warm">审批时间：{{ formatDateTime(app.approval_time) }}</div>
+                                    <div class="text-xs text-slate-warm">处理时间：{{ formatDateTime(app.approval_time) }} · 审批人：{{ app.approver_name || '未记录' }}</div>
                                     <button v-if="app.status === '已通过'" @click="generateAndDownloadPDF(app)" class="text-blue-600 text-sm font-bold underline">查看 PDF</button>
                                 </div>
+                                <div v-if="app.status === '已驳回'" class="mt-3 text-xs text-red-700 bg-red-50 border border-red-100 rounded-xl px-3 py-2">驳回原因：{{ app.rejection_reason || '未填写' }}</div>
                             </div>
                             <div v-if="filteredAdminApplications.length === 0" class="text-center text-gray-400 py-10 text-sm">当前筛选条件下暂无数据</div>
                         </div>
@@ -313,7 +331,7 @@
                         <div class="flex justify-between mb-4 items-center gap-3">
                             <div>
                                 <h3 class="font-bold text-lg">账号管理</h3>
-                                <p class="text-xs text-slate-warm mt-1">支持模板下载与 Excel 批量导入。</p>
+                                <p class="text-xs text-slate-warm mt-1">支持模板下载与通过 Supabase Edge Function 批量导入。</p>
                             </div>
                             <button @click="fetchUserList" class="text-blue-500 text-sm border px-3 py-2 rounded-xl font-bold">刷新</button>
                         </div>
@@ -376,8 +394,9 @@
                             <h3 class="font-bold text-lg mb-3">操作提醒</h3>
                             <div class="space-y-2 text-sm text-slate-warm">
                                 <p>1. 审批通过后，教师可直接下载公示 PDF，不再跳转第三方网盘。</p>
-                                <p>2. 如需批量创建账号，建议仅由管理员在可信环境中使用 Service Role Key。</p>
-                                <p>3. 导入历史作业时，系统会自动补全缺省字段并生成可追踪的文件编号。</p>
+                                <p>2. 批量创建账号已迁移到 Supabase Edge Function，前端不再要求输入 Service Role Key。</p>
+                                <p>3. 审批记录现在支持审批人和驳回原因，便于追溯。</p>
+                                <p>4. 导入历史作业时，系统会自动补全缺省字段并生成可追踪的文件编号。</p>
                             </div>
                         </div>
                     </div>
@@ -402,7 +421,7 @@
                 <div class="flex justify-between border-b border-black pb-2 items-end"><span class="pdf-label">时长：{{displayDuration(tempPdfData.duration)}}</span><span class="pdf-label">日期：{{formatDateTime(tempPdfData.date).split(' ')[0]}}</span></div>
                 <div class="border-2 border-black p-4 min-h-[400px] relative"><div class="absolute -top-3 left-4 bg-white px-2 font-bold">作业内容</div><p class="text-xl leading-loose whitespace-pre-wrap">{{tempPdfData.content}}</p></div>
                 <div class="border-b border-black pb-2 font-bold text-xl">双减要求：符合</div>
-                <div class="flex justify-between mt-4"><span class="pdf-label">审核：通过</span><span class="pdf-label">时间：{{formatDateTime(tempPdfData.approval_time).split(' ')[0]}}</span></div>
+                <div class="flex justify-between mt-4"><span class="pdf-label">审核人：{{tempPdfData.approver_name || '管理员'}}</span><span class="pdf-label">时间：{{formatDateTime(tempPdfData.approval_time).split(' ')[0]}}</span></div>
             </div>
         </div>
     </div>
@@ -412,6 +431,7 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
     const SUPABASE_URL = 'https://aqhdogbdqijppvujiawy.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_QDC8L-A-LQ0o-wEr7vVn3Q_fkJyk_Pi';
+    const BULK_CREATE_USERS_FUNCTION = 'bulk-create-users';
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const STATUS_OPTIONS = ['全部', '待审批', '已通过', '已驳回'];
     const pad = (value) => String(value).padStart(2, '0');
@@ -463,8 +483,11 @@
             const isLoading = ref(false);
             const loadingText = ref('');
             const showApprovalModal = ref(false);
+            const showRejectModal = ref(false);
             const approvalDateInput = ref('');
+            const rejectReasonInput = ref('');
             const currentApprovingItem = ref(null);
+            const currentRejectingItem = ref(null);
             const applications = ref([]);
             const userList = ref([]);
             const loginForm = ref({ account: '', password: '' });
@@ -514,7 +537,7 @@
                 if (adminStatusFilter.value !== '全部') list = list.filter((item) => item.status === adminStatusFilter.value);
                 const keyword = adminKeyword.value.trim().toLowerCase();
                 if (keyword) {
-                    list = list.filter((item) => [item.teacher_name, item.file_name, item.subject, item.content].map((value) => String(value || '').toLowerCase()).some((value) => value.includes(keyword)));
+                    list = list.filter((item) => [item.teacher_name, item.file_name, item.subject, item.content, item.approver_name, item.rejection_reason].map((value) => String(value || '').toLowerCase()).some((value) => value.includes(keyword)));
                 }
                 return list;
             });
@@ -636,8 +659,11 @@
                     adminStatusFilter.value = '全部';
                     adminKeyword.value = '';
                     showApprovalModal.value = false;
+                    showRejectModal.value = false;
                     currentApprovingItem.value = null;
+                    currentRejectingItem.value = null;
                     approvalDateInput.value = '';
+                    rejectReasonInput.value = '';
                     resetApplyForm();
                 } catch (error) {
                     showError('退出失败', error);
@@ -663,7 +689,10 @@
                     date: applyDate,
                     content,
                     file_name: buildApplicationFileName({ teacherName, grade: Number(applyForm.value.grade) || 1, subject: applyForm.value.subject || subjects[0], date: applyDate }),
-                    status: '待审批'
+                    status: '待审批',
+                    approval_time: null,
+                    approver_name: null,
+                    rejection_reason: null
                 };
                 setLoading(true, '提交审批中...');
                 try {
@@ -679,15 +708,24 @@
                 }
             };
 
-            const updateStatus = async (item, status, time = null) => {
+            const updateStatus = async (item, status, options = {}) => {
                 if (!item?.id) return alert('未找到需要更新的记录');
-                const updateData = { status, approval_time: status === '已通过' ? normalizeDateTimeInput(time || new Date()) : null };
+                const updateTime = normalizeDateTimeInput(options.time || new Date());
+                const updateData = {
+                    status,
+                    approval_time: updateTime,
+                    approver_name: displayUserName(),
+                    rejection_reason: status === '已驳回' ? (options.rejectionReason || '').trim() : null
+                };
                 setLoading(true, '更新审批状态...');
                 try {
                     const { error } = await sbClient.from('applications').update(updateData).eq('id', item.id);
                     if (error) throw error;
                     showApprovalModal.value = false;
+                    showRejectModal.value = false;
                     currentApprovingItem.value = null;
+                    currentRejectingItem.value = null;
+                    rejectReasonInput.value = '';
                     await fetchApplications(false);
                 } catch (error) {
                     showError('更新状态失败', error);
@@ -700,15 +738,28 @@
                 approvalDateInput.value = getLocalDateTimeInputValue();
                 showApprovalModal.value = true;
             };
+            const openRejectModal = (app) => {
+                currentRejectingItem.value = app;
+                rejectReasonInput.value = app?.rejection_reason || '';
+                showRejectModal.value = true;
+            };
             const confirmApproval = async () => {
                 if (!approvalDateInput.value) return alert('请选择审批通过时间');
-                await updateStatus(currentApprovingItem.value, '已通过', approvalDateInput.value);
+                await updateStatus(currentApprovingItem.value, '已通过', { time: approvalDateInput.value });
+            };
+            const confirmReject = async () => {
+                if (!rejectReasonInput.value.trim()) return alert('请填写驳回原因');
+                await updateStatus(currentRejectingItem.value, '已驳回', { rejectionReason: rejectReasonInput.value, time: new Date() });
             };
 
             const generateAndDownloadPDF = async (app) => {
                 setLoading(true, '生成 PDF 中...');
                 try {
-                    tempPdfData.value = { ...app, approval_time: app.approval_time || getLocalDateTimeInputValue() };
+                    tempPdfData.value = {
+                        ...app,
+                        approval_time: app.approval_time || getLocalDateTimeInputValue(),
+                        approver_name: app.approver_name || '管理员'
+                    };
                     await nextTick();
                     await new Promise((resolve) => setTimeout(resolve, 160));
                     const el = document.getElementById('pdf-template');
@@ -735,17 +786,13 @@
                 event.target.value = '';
                 if (!file) return;
                 if (userRole.value !== 'admin') return alert('只有管理员可以导入账号');
-                const secretKey = prompt("批量创建用户需要 Supabase 的 Service Role Key。系统不会保存该密钥，请在可信环境中粘贴后继续：");
-                if(!secretKey || !secretKey.startsWith('ey')) return alert("密钥无效，已取消导入");
                 setLoading(true, "读取账号模板中...");
                 try {
                     const data = await file.arrayBuffer();
                     const wb = XLSX.read(data);
                     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                    const adminClient = window.supabase.createClient(SUPABASE_URL, secretKey);
-                    let success = 0;
-                    let fail = 0;
-                    const failedNames = [];
+                    const users = [];
+                    const localFailedRows = [];
                     for (let i = 0; i < rows.length; i++) {
                         const r = rows[i];
                         const username = String(r["账号(拼音)"] || r["账号"] || '').trim();
@@ -753,24 +800,37 @@
                         const password = String(r["密码(至少6位)"] || r["密码"] || '').trim();
                         const role = String(r["身份(teacher/admin)"] || r["身份"] || "teacher").trim() === 'admin' ? 'admin' : 'teacher';
                         if(!username || !name || password.length < 6) {
-                            fail++;
-                            failedNames.push(name || username || `第${i + 1}行`);
+                            localFailedRows.push(name || username || `第${i + 1}行`);
                             continue;
                         }
-                        loadingText.value = `正在创建账号 ${i + 1}/${rows.length}`;
-                        const { error } = await adminClient.auth.admin.createUser({
-                            email: username + '@school.com', password: password, email_confirm: true, user_metadata: { username, name, role }
+                        users.push({
+                            username,
+                            name,
+                            password,
+                            role,
+                            rowLabel: `第${i + 1}行`
                         });
-                        if(error) {
-                            fail++;
-                            failedNames.push(name || username);
-                        } else {
-                            success++;
-                        }
                     }
+
+                    if (!users.length) {
+                        return alert(`没有可导入的有效账号数据。\n无效行：${localFailedRows.join('、')}`);
+                    }
+
+                    loadingText.value = '调用服务器函数创建账号...';
+                    const { data: result, error } = await sbClient.functions.invoke(BULK_CREATE_USERS_FUNCTION, {
+                        body: { users }
+                    });
+                    if (error) throw error;
+                    if (!result?.ok) throw new Error(result?.error || '批量创建账号失败，请检查 Edge Function 是否已部署');
+
                     await fetchUserList(false);
-                    const extra = failedNames.length ? `\n失败账号：${failedNames.slice(0, 5).join('、')}${failedNames.length > 5 ? ' 等' : ''}` : '';
-                    alert(`导入完成\n成功：${success} 个\n失败：${fail} 个${extra}`);
+                    const remoteFailedUsers = Array.isArray(result.failedUsers) ? result.failedUsers.map((item) => item.name || item.username || item.rowLabel || '未知账号') : [];
+                    const failedNames = [...localFailedRows, ...remoteFailedUsers];
+                    const success = Number(result.success || 0);
+                    const fail = failedNames.length;
+                    const extra = failedNames.length ? `\n失败账号：${failedNames.slice(0, 8).join('、')}${failedNames.length > 8 ? ' 等' : ''}` : '';
+                    const warningText = Array.isArray(result.warnings) && result.warnings.length ? `\n提示：${result.warnings.slice(0, 3).join('；')}` : '';
+                    alert(`导入完成\n成功：${success} 个\n失败：${fail} 个${extra}${warningText}`);
                 } catch(error) {
                     showError("批量导入账号失败", error);
                 } finally {
@@ -812,7 +872,9 @@
                             content,
                             file_name: buildApplicationFileName({ teacherName, grade, subject, date }),
                             status: '已通过',
-                            approval_time: getLocalDateTimeInputValue()
+                            approval_time: getLocalDateTimeInputValue(),
+                            approver_name: displayUserName(),
+                            rejection_reason: null
                         };
                     }).filter(Boolean);
                     if(!payload.length) return alert("导入文件中没有可写入的有效记录");
@@ -828,7 +890,7 @@
             };
 
             const exportExcel = () => {
-                const d = sortRecords(applications.value).map(a => ({ "文件编号": a.file_name || '', "教师": a.teacher_name || '', "年级": a.grade || '', "学科": a.subject || '', "时长": a.duration || '', "布置时间": formatDateTime(a.date), "审批时间": formatDateTime(a.approval_time), "状态": a.status || '', "内容": a.content || '' }));
+                const d = sortRecords(applications.value).map(a => ({ "文件编号": a.file_name || '', "教师": a.teacher_name || '', "年级": a.grade || '', "学科": a.subject || '', "时长": a.duration || '', "布置时间": formatDateTime(a.date), "处理时间": formatDateTime(a.approval_time), "状态": a.status || '', "审批人": a.approver_name || '', "驳回原因": a.rejection_reason || '', "内容": a.content || '' }));
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d), "审批汇总");
                 XLSX.writeFile(wb, `作业审批汇总_${formatDateTime(new Date()).replace(/[-:\s]/g, '').slice(0, 12)}.xlsx`);
@@ -852,11 +914,11 @@
 
             return {
                 currentUser, userRole, authMode, loginForm, signupForm, applyForm,
-                applications, userList, currentTab, isLoading, loadingText, showApprovalModal, approvalDateInput,
+                applications, userList, currentTab, isLoading, loadingText, showApprovalModal, showRejectModal, approvalDateInput, rejectReasonInput,
                 tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword,
                 overviewStats, filteredTeacherApplications, filteredAdminApplications,
                 handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,
-                openApprovalModal, confirmApproval, updateStatus, generateAndDownloadPDF, copyFileName,
+                openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, generateAndDownloadPDF, copyFileName,
                 statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername,
                 roleLabel, roleBadgeClass, displayDuration, exportExcel, downloadImportTemplate, handleImportExcel,
                 downloadUserTemplate, handleImportUsers
