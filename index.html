@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%238E354A'/%3E%3Cpath d='M18 20h28v6H18zm0 10h28v6H18zm0 10h20v6H18z' fill='%23F7F5F0'/%3E%3C/svg%3E">
+    <title>作业审批系统 | 云端协同审批</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'china-red': '#8E354A',
+                        'paper-bg': '#F7F5F0',
+                        'ink': '#3E3A39',
+                        'slate-warm': '#8C8177'
+                    },
+                    fontFamily: {
+                        serif: ['"SimSun"', 'serif'],
+                        sans: ['"PingFang SC"', '"Microsoft YaHei"', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background:
+                radial-gradient(circle at top left, rgba(142, 53, 74, 0.08), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(214, 202, 178, 0.5), transparent 28%),
+                #F7F5F0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        [v-cloak] { display: none; }
+        .input-chinese {
+            border: 1px solid #D6CAB2;
+            background: #FCFCFA;
+            appearance: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        .input-chinese:focus {
+            border-color: #8E354A;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(142, 53, 74, 0.12);
+        }
+        .mobile-card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 10px 24px rgba(62, 58, 57, 0.06);
+            border: 1px solid rgba(214, 202, 178, 0.6);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .mobile-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 30px rgba(62, 58, 57, 0.08);
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #8E354A;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        .summary-card {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.9));
+            border: 1px solid rgba(214, 202, 178, 0.7);
+            border-radius: 16px;
+            padding: 14px;
+            box-shadow: 0 8px 20px rgba(62, 58, 57, 0.05);
+        }
+        .filter-chip {
+            white-space: nowrap;
+            border-radius: 999px;
+            border: 1px solid #D8D1C2;
+            background: rgba(255, 255, 255, 0.92);
+            color: #6E6258;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 8px 12px;
+            transition: all 0.2s ease;
+        }
+        .filter-chip.active {
+            border-color: #8E354A;
+            background: #8E354A;
+            color: white;
+            box-shadow: 0 8px 18px rgba(142, 53, 74, 0.18);
+        }
+        .meta-text {
+            color: #8C8177;
+            font-size: 12px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .pdf-title { font-size: 22pt; font-weight: bold; font-family: "SimSun", serif; }
+        .pdf-label { font-family: "SimSun", serif; font-weight: bold; font-size: 14pt; }
+        .pdf-value { font-family: "SimSun", serif; font-size: 14pt; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans text-ink">
+
+<div id="app" v-cloak class="flex flex-col min-h-screen">
+    
+    <!-- Loading -->
+    <div v-if="isLoading" class="fixed inset-0 bg-white/95 backdrop-blur-sm z-[70] flex flex-col items-center justify-center">
+        <div class="loader mb-4 w-12 h-12 border-4"></div>
+        <span class="font-bold text-lg text-ink">{{ loadingText || '处理中...' }}</span>
+    </div>
+
+    <!-- 审批弹窗 -->
+    <div v-if="showApprovalModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl">
+            <h3 class="text-xl font-bold mb-2">确认审批通过</h3>
+            <p class="text-sm text-slate-warm mb-4">请确认审批通过时间，系统会据此写入公示 PDF。</p>
+            <input v-model="approvalDateInput" type="datetime-local" class="input-chinese w-full p-3 rounded-xl text-base mb-5 bg-gray-50">
+            <div class="grid grid-cols-2 gap-3">
+                <button @click="showApprovalModal = false" class="px-4 py-3 rounded-xl bg-gray-100 font-bold">取消</button>
+                <button @click="confirmApproval" class="px-4 py-3 rounded-xl bg-green-600 text-white font-bold">确认通过</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showRejectModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl">
+            <h3 class="text-xl font-bold mb-2">确认驳回</h3>
+            <p class="text-sm text-slate-warm mb-4">请输入驳回原因，教师端会看到这条说明。</p>
+            <textarea v-model.trim="rejectReasonInput" rows="4" class="input-chinese w-full p-3 rounded-xl text-base mb-5 bg-gray-50" placeholder="例如：作业时长超出规范，请调整后重新提交"></textarea>
+            <div class="grid grid-cols-2 gap-3">
+                <button @click="showRejectModal = false" class="px-4 py-3 rounded-xl bg-gray-100 font-bold">取消</button>
+                <button @click="confirmReject" class="px-4 py-3 rounded-xl bg-red-600 text-white font-bold">确认驳回</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录页 -->
+    <div v-if="!currentUser" class="flex-grow flex items-center justify-center p-4 bg-paper-bg relative">
+        <div class="bg-white/95 w-full max-w-sm p-8 rounded-3xl shadow-xl z-10 border border-white">
+            <div class="mb-8 text-center">
+                <p class="text-xs uppercase tracking-[0.35em] text-slate-warm mb-2">School Workflow</p>
+                <h1 class="text-3xl font-bold font-serif text-china-red mb-2 tracking-[0.25em]">作业审批</h1>
+                <p class="text-center text-gray-400 text-sm">统一申报、统一审批、统一导出</p>
+            </div>
+            <div class="flex border-b border-gray-100 mb-6">
+                <button @click="authMode = 'login'" :class="authMode === 'login' ? 'text-china-red border-china-red' : 'text-gray-300 border-transparent'" class="flex-1 pb-3 border-b-2 font-bold">登录</button>
+                <button @click="authMode = 'signup'" :class="authMode === 'signup' ? 'text-china-red border-china-red' : 'text-gray-300 border-transparent'" class="flex-1 pb-3 border-b-2 font-bold">注册</button>
+            </div>
+            <div class="space-y-4">
+                <input v-if="authMode==='signup'" v-model.trim="signupForm.username" class="input-chinese w-full px-4 py-3 rounded-xl" placeholder="账号（拼音或字母数字）">
+                <input v-if="authMode==='signup'" v-model.trim="signupForm.name" class="input-chinese w-full px-4 py-3 rounded-xl" placeholder="真实姓名">
+                <input v-model.trim="loginForm.account" v-if="authMode==='login'" class="input-chinese w-full px-4 py-3 rounded-xl" placeholder="账号">
+                <input v-if="authMode==='login'" v-model="loginForm.password" type="password" class="input-chinese w-full px-4 py-3 rounded-xl" placeholder="密码">
+                <input v-if="authMode==='signup'" v-model="signupForm.password" type="password" class="input-chinese w-full px-4 py-3 rounded-xl" placeholder="密码（至少 6 位）">
+                <select v-if="authMode==='signup'" v-model="signupForm.role" class="input-chinese w-full px-4 py-3 rounded-xl"><option value="teacher">教师</option><option value="admin">管理员</option></select>
+                <button @click="authMode==='login'?handleLogin():handleSignup()" class="w-full bg-china-red text-white font-bold py-3.5 rounded-xl text-lg shadow-lg shadow-red-100">{{authMode==='login'?'登录系统':'创建账号'}}</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div v-else class="flex flex-col h-screen bg-paper-bg overflow-hidden">
+        <header class="bg-white/90 backdrop-blur-sm border-b border-[#E7E0D3] z-20 flex-shrink-0">
+            <div class="px-4 h-16 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-china-red text-white flex items-center justify-center font-serif font-bold rounded-xl shadow-lg shadow-red-100">阅</div>
+                    <div>
+                        <h2 class="text-lg font-bold text-ink">{{ userRole === 'admin' ? '后台管理' : '作业申报' }}</h2>
+                        <p class="text-xs text-slate-warm">{{ displayUserName() }} · {{ roleLabel(userRole) }}</p>
+                    </div>
+                </div>
+                <button @click="logout" class="text-gray-400 text-sm font-semibold">退出</button>
+            </div>
+        </header>
+
+        <div class="flex-grow overflow-y-auto overflow-x-hidden p-3 pb-32">
+            <div class="max-w-4xl mx-auto w-full">
+                
+                <!-- === 教师端 === -->
+                <div v-if="userRole === 'teacher'" class="space-y-4">
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">全部申报</div>
+                            <div class="text-2xl font-bold text-ink">{{ overviewStats.total }}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">待审批</div>
+                            <div class="text-2xl font-bold text-yellow-600">{{ overviewStats.pending }}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">已通过</div>
+                            <div class="text-2xl font-bold text-green-600">{{ overviewStats.approved }}</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow p-5 border border-[#E7E0D3]">
+                        <div class="flex items-start justify-between gap-4 mb-4">
+                            <div>
+                                <h3 class="font-bold text-lg text-ink">新建申报</h3>
+                                <p class="text-xs text-slate-warm mt-1">审批通过后可直接下载 PDF 归档，已移除百度网盘中转流程。</p>
+                            </div>
+                            <button @click="resetApplyForm" class="text-xs px-3 py-2 rounded-full border border-[#D8D1C2] text-slate-warm font-bold">重置表单</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <select v-model="applyForm.grade" class="input-chinese p-3 rounded-xl"><option v-for="i in 9" :key="i" :value="i">{{i}}年级</option></select>
+                            <select v-model="applyForm.subject" class="input-chinese p-3 rounded-xl"><option v-for="subject in subjects" :key="subject" :value="subject">{{subject}}</option></select>
+                        </div>
+                        <div class="flex gap-3 mb-3">
+                            <input v-model="applyForm.date" type="datetime-local" class="input-chinese w-2/3 p-3 rounded-xl text-sm">
+                            <input v-model="applyForm.duration" type="number" min="1" placeholder="分钟" class="input-chinese w-1/3 p-3 rounded-xl text-center">
+                        </div>
+                        <textarea v-model.trim="applyForm.content" rows="3" class="input-chinese w-full p-3 rounded-xl mb-4" placeholder="填写本次作业内容、要求与安排..."></textarea>
+                        <button @click="submitApply" class="w-full bg-china-red text-white py-3.5 rounded-xl font-bold text-lg shadow-lg shadow-red-100">提交审批</button>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow p-4 border border-[#E7E0D3]">
+                        <div class="flex justify-between items-start gap-3 mb-4">
+                            <div>
+                                <h3 class="font-bold text-gray-700">我的申报记录</h3>
+                                <p class="text-xs text-slate-warm mt-1">可按审批状态筛选，审批通过后支持下载公示 PDF 或复制编号。</p>
+                            </div>
+                            <button @click="fetchApplications" class="text-blue-600 text-xs font-bold">刷新</button>
+                        </div>
+                        <div class="flex gap-2 overflow-x-auto pb-2 mb-2">
+                            <button v-for="status in statusOptions" :key="`teacher-${status}`" @click="teacherStatusFilter = status" :class="['filter-chip', teacherStatusFilter === status ? 'active' : '']">{{ status }}</button>
+                        </div>
+                        <div v-if="filteredTeacherApplications.length" class="space-y-3 mt-3">
+                            <div v-for="app in filteredTeacherApplications" :key="app.id" class="mobile-card relative overflow-hidden">
+                                <div class="flex justify-between gap-3 mb-3">
+                                    <div>
+                                        <div class="font-bold text-gray-800 text-base break-all">{{ app.file_name }}</div>
+                                        <div class="meta-text mt-1">{{ app.grade || '--' }}年级 · {{ app.subject || '--' }} · {{ displayDuration(app.duration) }}</div>
+                                    </div>
+                                    <span :class="statusClass(app.status)" class="px-2.5 py-1 rounded-full text-xs font-bold h-fit">{{ app.status || '未知状态' }}</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-xs text-slate-warm mb-3">
+                                    <div>布置时间：{{ formatDateTime(app.date) }}</div>
+                                    <div>处理时间：{{ formatDateTime(app.approval_time) }}</div>
+                                </div>
+                                <div class="text-sm text-gray-600 mb-3 bg-[#FBFAF7] p-3 rounded-xl whitespace-pre-wrap break-words">{{ app.content || '暂无内容' }}</div>
+                                <div v-if="app.status === '已通过'" class="bg-green-50 p-3 rounded-xl border border-green-100">
+                                    <div class="text-xs text-green-700 font-bold mb-1">后续操作</div>
+                                    <div class="text-[11px] text-green-700/80 mb-2">审批人：{{ app.approver_name || '未记录' }}</div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button @click="generateAndDownloadPDF(app)" class="bg-white text-gray-700 border border-gray-200 py-2.5 rounded-xl font-bold text-xs shadow-sm active:bg-gray-50">下载 PDF</button>
+                                        <button @click="copyFileName(app.file_name)" class="bg-white text-gray-700 border border-gray-200 py-2.5 rounded-xl font-bold text-xs shadow-sm active:bg-gray-50">复制文件编号</button>
+                                    </div>
+                                </div>
+                                <div v-else-if="app.status === '待审批'" class="text-xs text-center text-yellow-700 bg-yellow-50 py-2.5 rounded-xl font-semibold">等待管理员审核中</div>
+                                <div v-else class="bg-red-50 border border-red-100 py-3 px-3 rounded-xl">
+                                    <div class="text-xs text-center text-red-600 font-semibold">已驳回，可修改内容后重新提交</div>
+                                    <div class="text-xs text-red-700 mt-2">驳回原因：{{ app.rejection_reason || '未填写' }}</div>
+                                    <div class="text-xs text-red-500 mt-1">审批人：{{ app.approver_name || '未记录' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="text-center text-gray-400 py-10 text-sm">当前筛选条件下暂无申报记录</div>
+                    </div>
+                </div>
+
+                <!-- === 管理员端 === -->
+                <div v-if="userRole === 'admin'" class="space-y-4">
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">全部记录</div>
+                            <div class="text-2xl font-bold">{{ overviewStats.total }}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">待审批</div>
+                            <div class="text-2xl font-bold text-yellow-600">{{ overviewStats.pending }}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">已通过</div>
+                            <div class="text-2xl font-bold text-green-600">{{ overviewStats.approved }}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">已驳回</div>
+                            <div class="text-2xl font-bold text-red-500">{{ overviewStats.rejected }}</div>
+                        </div>
+                    </div>
+
+                    <div v-if="currentTab === 'active'" class="space-y-4">
+                        <div class="bg-white rounded-2xl shadow p-4 border border-[#E7E0D3]">
+                            <div class="flex flex-col gap-3">
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <input v-model.trim="adminKeyword" type="search" class="input-chinese flex-1 px-4 py-3 rounded-xl" placeholder="搜索教师、文件编号、学科或内容">
+                                    <button @click="fetchApplications" class="px-4 py-3 rounded-xl border border-[#D8D1C2] font-bold text-slate-warm">刷新数据</button>
+                                </div>
+                                <div class="flex gap-2 overflow-x-auto pb-1">
+                                    <button v-for="status in statusOptions" :key="`admin-${status}`" @click="adminStatusFilter = status" :class="['filter-chip', adminStatusFilter === status ? 'active' : '']">{{ status }}</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <div v-for="app in filteredAdminApplications" :key="app.id" class="mobile-card border-l-4" :class="adminCardBorderClass(app.status)">
+                                <div class="flex justify-between items-start gap-3 mb-3">
+                                    <div>
+                                        <div class="font-bold text-gray-900">{{ app.teacher_name || '未命名教师' }}</div>
+                                        <div class="text-xs text-gray-400 font-mono break-all mt-1">{{ app.file_name || '未生成编号' }}</div>
+                                    </div>
+                                    <span :class="statusClass(app.status)" class="px-2.5 py-1 rounded-full text-xs font-bold">{{ app.status || '未知状态' }}</span>
+                                </div>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-slate-warm mb-3">
+                                    <div>年级：{{ app.grade || '--' }}年级</div>
+                                    <div>学科：{{ app.subject || '--' }}</div>
+                                    <div>时长：{{ displayDuration(app.duration) }}</div>
+                                    <div>布置时间：{{ formatDateTime(app.date) }}</div>
+                                </div>
+                                <div class="text-sm text-gray-600 bg-[#FBFAF7] p-3 rounded-xl mb-3 whitespace-pre-wrap break-words">{{ app.content || '暂无内容' }}</div>
+                                <div v-if="app.status === '待审批'" class="grid grid-cols-2 gap-2 mt-2">
+                                    <button @click="openApprovalModal(app)" class="bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm">通过</button>
+                                    <button @click="openRejectModal(app)" class="bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-xl font-bold text-sm">驳回</button>
+                                </div>
+                                <div v-else class="flex justify-between items-center gap-3 mt-2">
+                                    <div class="text-xs text-slate-warm">处理时间：{{ formatDateTime(app.approval_time) }} · 审批人：{{ app.approver_name || '未记录' }}</div>
+                                    <button v-if="app.status === '已通过'" @click="generateAndDownloadPDF(app)" class="text-blue-600 text-sm font-bold underline">查看 PDF</button>
+                                </div>
+                                <div v-if="app.status === '已驳回'" class="mt-3 text-xs text-red-700 bg-red-50 border border-red-100 rounded-xl px-3 py-2">驳回原因：{{ app.rejection_reason || '未填写' }}</div>
+                            </div>
+                            <div v-if="filteredAdminApplications.length === 0" class="text-center text-gray-400 py-10 text-sm">当前筛选条件下暂无数据</div>
+                        </div>
+                    </div>
+
+                    <div v-if="currentTab === 'users'" class="bg-white rounded-2xl shadow p-4 border border-[#E7E0D3]">
+                        <div class="flex justify-between mb-4 items-center gap-3">
+                            <div>
+                                <h3 class="font-bold text-lg">账号管理</h3>
+                                <p class="text-xs text-slate-warm mt-1">支持模板下载与通过 Supabase Edge Function 批量导入。</p>
+                            </div>
+                            <button @click="fetchUserList" class="text-blue-500 text-sm border px-3 py-2 rounded-xl font-bold">刷新</button>
+                        </div>
+                        <div class="bg-blue-50 p-3 rounded-xl mb-4 border border-blue-100">
+                            <h4 class="font-bold text-blue-800 text-sm mb-2">批量操作</h4>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button @click="downloadUserTemplate" class="bg-white text-blue-600 border border-blue-200 py-2.5 rounded-xl text-xs font-bold">下载 Excel 模板</button>
+                                <button @click="$refs.userInput.click()" class="bg-blue-600 text-white py-2.5 rounded-xl text-xs font-bold">导入账号</button>
+                            </div>
+                            <input type="file" ref="userInput" accept=".xlsx" class="hidden" @change="handleImportUsers">
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-gray-50 text-gray-500"><tr><th class="p-3">姓名</th><th class="p-3">账号</th><th class="p-3">身份</th></tr></thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    <tr v-for="u in userList" :key="u.id || displayProfileUsername(u)">
+                                        <td class="p-3 font-bold">{{ displayProfileName(u) }}</td><td class="p-3 text-gray-500">{{ displayProfileUsername(u) }}</td>
+                                        <td class="p-3"><span :class="roleBadgeClass(u.role)" class="px-2 py-1 rounded-full text-xs">{{ roleLabel(u.role) }}</span></td>
+                                    </tr>
+                                    <tr v-if="userList.length === 0"><td colspan="3" class="p-6 text-center text-gray-400">暂无账号数据</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div v-if="currentTab === 'tools'" class="space-y-4">
+                        <div class="bg-white rounded-2xl shadow p-5 border border-[#E7E0D3]">
+                            <h3 class="font-bold text-lg mb-3">系统概览</h3>
+                            <div class="grid grid-cols-2 gap-3 text-sm">
+                                <div class="summary-card">
+                                    <div class="text-xs text-slate-warm mb-1">审批模式</div>
+                                    <div class="font-bold">站内审批 + 站内导出</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="text-xs text-slate-warm mb-1">外部网盘依赖</div>
+                                    <div class="font-bold text-green-600">已移除</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="text-xs text-slate-warm mb-1">当前待处理</div>
+                                    <div class="font-bold text-yellow-600">{{ overviewStats.pending }} 条</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="text-xs text-slate-warm mb-1">数据导出</div>
+                                    <div class="font-bold">Excel / PDF</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl shadow p-5 border border-[#E7E0D3]">
+                            <h3 class="font-bold text-lg mb-4">数据工具</h3>
+                            <div class="space-y-3">
+                                <button @click="exportExcel" class="w-full border border-gray-300 py-3 rounded-xl font-bold text-green-700">导出 Excel 汇总表</button>
+                                <button @click="downloadImportTemplate" class="w-full bg-gray-50 text-gray-600 py-2.5 rounded-xl text-sm font-bold">下载作业导入模板</button>
+                                <button @click="$refs.fileInput.click()" class="w-full border border-dashed border-gray-300 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-50">导入历史作业记录</button>
+                                <input type="file" ref="fileInput" accept=".xlsx" class="hidden" @change="handleImportExcel">
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl shadow p-5 border border-[#E7E0D3]">
+                            <h3 class="font-bold text-lg mb-3">操作提醒</h3>
+                            <div class="space-y-2 text-sm text-slate-warm">
+                                <p>1. 审批通过后，教师可直接下载公示 PDF，不再跳转第三方网盘。</p>
+                                <p>2. 批量创建账号已迁移到 Supabase Edge Function，前端不再要求输入 Service Role Key。</p>
+                                <p>3. 审批记录现在支持审批人和驳回原因，便于追溯。</p>
+                                <p>4. 导入历史作业时，系统会自动补全缺省字段并生成可追踪的文件编号。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部导航 (管理员) -->
+        <div v-if="userRole === 'admin'" class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t flex justify-around items-center pb-[env(safe-area-inset-bottom)] z-30 h-16 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+            <button @click="switchTab('active')" :class="currentTab === 'active' ? 'text-china-red' : 'text-gray-400'" class="flex flex-col items-center p-2"><span class="text-xl">📋</span><span class="text-xs font-bold">审批</span></button>
+            <button @click="switchTab('users')" :class="currentTab === 'users' ? 'text-china-red' : 'text-gray-400'" class="flex flex-col items-center p-2"><span class="text-xl">👥</span><span class="text-xs font-bold">账号</span></button>
+            <button @click="switchTab('tools')" :class="currentTab === 'tools' ? 'text-china-red' : 'text-gray-400'" class="flex flex-col items-center p-2"><span class="text-xl">🧰</span><span class="text-xs font-bold">工具</span></button>
+        </div>
+    </div>
+
+    <!-- PDF 模板 -->
+    <div style="position: fixed; left: -9999px; top: 0;">
+        <div id="pdf-template" class="bg-white text-black p-16" style="width: 794px; min-height: 1123px;">
+            <div class="text-center mb-12"><h1 class="pdf-title border-b-4 border-black inline-block pb-2 px-4">作业公示单</h1></div>
+            <div v-if="tempPdfData" class="flex flex-col gap-10 px-8">
+                <div class="flex justify-between border-b border-black pb-2 items-end"><span class="pdf-label">年级：{{tempPdfData.grade}}年级</span><span class="pdf-label">学科：{{tempPdfData.subject}}</span></div>
+                <div class="flex justify-between border-b border-black pb-2 items-end"><span class="pdf-label">时长：{{displayDuration(tempPdfData.duration)}}</span><span class="pdf-label">日期：{{formatDateTime(tempPdfData.date).split(' ')[0]}}</span></div>
+                <div class="border-2 border-black p-4 min-h-[400px] relative"><div class="absolute -top-3 left-4 bg-white px-2 font-bold">作业内容</div><p class="text-xl leading-loose whitespace-pre-wrap">{{tempPdfData.content}}</p></div>
+                <div class="border-b border-black pb-2 font-bold text-xl">双减要求：符合</div>
+                <div class="flex justify-between mt-4"><span class="pdf-label">审核人：{{tempPdfData.approver_name || '管理员'}}</span><span class="pdf-label">时间：{{formatDateTime(tempPdfData.approval_time).split(' ')[0]}}</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
+    const SUPABASE_URL = 'https://aqhdogbdqijppvujiawy.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_QDC8L-A-LQ0o-wEr7vVn3Q_fkJyk_Pi';
+    const BULK_CREATE_USERS_FUNCTION = 'bulk-create-users';
+    const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const STATUS_OPTIONS = ['全部', '待审批', '已通过', '已驳回'];
+    const pad = (value) => String(value).padStart(2, '0');
+    const parseDateValue = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+        if (typeof value === 'number' && window.XLSX?.SSF?.parse_date_code) {
+            const parsed = window.XLSX.SSF.parse_date_code(value);
+            if (parsed) return new Date(parsed.y, parsed.m - 1, parsed.d, parsed.H || 0, parsed.M || 0, Math.floor(parsed.S || 0));
+        }
+        const text = String(value).trim();
+        if (!text) return null;
+        const normalized = text.includes('T') ? text : text.replace(' ', 'T');
+        const date = new Date(normalized);
+        return Number.isNaN(date.getTime()) ? null : date;
+    };
+    const getLocalDateTimeInputValue = (value = new Date()) => {
+        const date = parseDateValue(value) || new Date();
+        const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+        return local.toISOString().slice(0, 16);
+    };
+    const formatDateTime = (value) => {
+        const date = parseDateValue(value);
+        if (!date) return '--';
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    };
+    const normalizeDateTimeInput = (value, fallback = new Date()) => getLocalDateTimeInputValue(parseDateValue(value) || fallback);
+    const buildDefaultApplyForm = () => ({ grade: 1, subject: '语文', duration: 30, date: getLocalDateTimeInputValue(), content: '' });
+    const getRecordTime = (item) => parseDateValue(item?.updated_at || item?.created_at || item?.approval_time || item?.date)?.getTime() || 0;
+    const sortRecords = (items = []) => [...items].sort((a, b) => getRecordTime(b) - getRecordTime(a));
+    const filterDeletedRecords = (items = []) => items.filter((item) => item && item.is_deleted !== true);
+    const buildStats = (items = []) => ({
+        total: items.length,
+        pending: items.filter((item) => item.status === '待审批').length,
+        approved: items.filter((item) => item.status === '已通过').length,
+        rejected: items.filter((item) => item.status === '已驳回').length
+    });
+    const buildApplicationFileName = ({ teacherName, grade, subject, date }) => {
+        const stamp = formatDateTime(date).replace(/[-:\s]/g, '').slice(0, 12);
+        return `${teacherName}-${grade}年级-${subject}-${stamp || Date.now()}`;
+    };
+
+    createApp({
+        setup() {
+            const currentUser = ref(null);
+            const userRole = ref('');
+            const authMode = ref('login');
+            const currentTab = ref('active');
+            const isLoading = ref(false);
+            const loadingText = ref('');
+            const showApprovalModal = ref(false);
+            const showRejectModal = ref(false);
+            const approvalDateInput = ref('');
+            const rejectReasonInput = ref('');
+            const currentApprovingItem = ref(null);
+            const currentRejectingItem = ref(null);
+            const applications = ref([]);
+            const userList = ref([]);
+            const loginForm = ref({ account: '', password: '' });
+            const signupForm = ref({ username: '', password: '', name: '', role: 'teacher' });
+            const applyForm = ref(buildDefaultApplyForm());
+            const teacherStatusFilter = ref('全部');
+            const adminStatusFilter = ref('全部');
+            const adminKeyword = ref('');
+            const tempPdfData = ref(null);
+            const subjects = ['语文', '数学', '英语', '物理', '化学', '生物', '政治', '历史', '地理'];
+
+            const setLoading = (state, text = '') => {
+                isLoading.value = state;
+                loadingText.value = state ? text : '';
+            };
+
+            const showError = (title, error) => {
+                alert(`${title}\n${error?.message || error || '未知错误'}`);
+            };
+
+            const setCurrentUser = (user) => {
+                currentUser.value = user || null;
+                userRole.value = user?.user_metadata?.role || user?.app_metadata?.role || '';
+            };
+
+            const displayUserName = (user = currentUser.value) => user?.user_metadata?.name || user?.user_metadata?.username || user?.email?.split('@')[0] || '未命名用户';
+            const displayProfileName = (profile) => profile?.full_name || profile?.name || profile?.username || '未命名';
+            const displayProfileUsername = (profile) => profile?.username || profile?.email?.split('@')[0] || '--';
+            const roleLabel = (role) => role === 'admin' ? '管理员' : '教师';
+            const roleBadgeClass = (role) => role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600';
+            const statusClass = (status) => ({ '待审批': 'bg-yellow-100 text-yellow-800', '已通过': 'bg-green-100 text-green-800', '已驳回': 'bg-red-50 text-red-600' }[status] || 'bg-gray-100 text-gray-600');
+            const adminCardBorderClass = (status) => ({ '待审批': 'border-l-yellow-400', '已通过': 'border-l-green-500', '已驳回': 'border-l-red-400' }[status] || 'border-l-gray-300');
+            const displayDuration = (duration) => {
+                const minutes = Number(duration);
+                return Number.isFinite(minutes) && minutes > 0 ? `${minutes}分钟` : '--';
+            };
+            const resetApplyForm = () => { applyForm.value = buildDefaultApplyForm(); };
+
+            const overviewStats = computed(() => buildStats(applications.value));
+            const filteredTeacherApplications = computed(() => {
+                let list = sortRecords(filterDeletedRecords(applications.value));
+                if (teacherStatusFilter.value !== '全部') list = list.filter((item) => item.status === teacherStatusFilter.value);
+                return list;
+            });
+            const filteredAdminApplications = computed(() => {
+                let list = sortRecords(filterDeletedRecords(applications.value));
+                if (adminStatusFilter.value !== '全部') list = list.filter((item) => item.status === adminStatusFilter.value);
+                const keyword = adminKeyword.value.trim().toLowerCase();
+                if (keyword) {
+                    list = list.filter((item) => [item.teacher_name, item.file_name, item.subject, item.content, item.approver_name, item.rejection_reason].map((value) => String(value || '').toLowerCase()).some((value) => value.includes(keyword)));
+                }
+                return list;
+            });
+
+            onMounted(async () => {
+                const { data: { session }, error } = await sbClient.auth.getSession();
+                if (error) return showError('读取登录状态失败', error);
+                if (session?.user) {
+                    setCurrentUser(session.user);
+                    await initData();
+                }
+            });
+
+            const initData = async () => {
+                setLoading(true, '加载系统数据...');
+                try {
+                    await fetchApplications(false);
+                    if (userRole.value === 'admin') await fetchUserList(false);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchApplications = async (showLoadingOverlay = true) => {
+                if (!currentUser.value) return;
+                if (showLoadingOverlay) setLoading(true, '同步申报数据...');
+                try {
+                    let query = sbClient.from('applications').select('*');
+                    if (userRole.value === 'teacher') query = query.eq('user_id', currentUser.value.id);
+                    const { data, error } = await query;
+                    if (error) throw error;
+                    applications.value = sortRecords(filterDeletedRecords(data || []));
+                } catch (error) {
+                    showError('获取申报记录失败', error);
+                } finally {
+                    if (showLoadingOverlay) setLoading(false);
+                }
+            };
+
+            const fetchUserList = async (showLoadingOverlay = false) => {
+                if (userRole.value !== 'admin') return;
+                if (showLoadingOverlay) setLoading(true, '同步账号数据...');
+                try {
+                    const { data, error } = await sbClient.from('profiles').select('*');
+                    if (error) throw error;
+                    userList.value = sortRecords(data || []);
+                } catch (error) {
+                    userList.value = [];
+                    showError('获取账号列表失败', error);
+                } finally {
+                    if (showLoadingOverlay) setLoading(false);
+                }
+            };
+
+            const handleLogin = async () => {
+                const account = loginForm.value.account.trim();
+                const password = loginForm.value.password;
+                if (!account) return alert('请输入账号');
+                if (!password) return alert('请输入密码');
+                setLoading(true, '登录中...');
+                try {
+                    const email = account.includes('@') ? account : `${account}@school.com`;
+                    const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+                    if (error) throw error;
+                    setCurrentUser(data.user);
+                    await initData();
+                } catch (error) {
+                    showError('登录失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleSignup = async () => {
+                const username = signupForm.value.username.trim();
+                const name = signupForm.value.name.trim();
+                const password = signupForm.value.password;
+                const role = signupForm.value.role;
+                if (!username) return alert('请输入账号');
+                if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) return alert('账号仅支持 3-20 位字母、数字或下划线');
+                if (!name) return alert('请输入真实姓名');
+                if (!password || password.length < 6) return alert('密码至少 6 位');
+                setLoading(true, '注册中...');
+                try {
+                    const { data, error } = await sbClient.auth.signUp({
+                        email: `${username}@school.com`,
+                        password,
+                        options: { data: { username, name, role } }
+                    });
+                    if (error) throw error;
+                    signupForm.value = { username: '', password: '', name: '', role: 'teacher' };
+                    loginForm.value.account = username;
+                    loginForm.value.password = '';
+                    if (data?.session?.user) {
+                        setCurrentUser(data.session.user);
+                        await initData();
+                        alert('注册成功，已自动登录。');
+                    } else {
+                        authMode.value = 'login';
+                        alert('注册成功，请使用新账号登录。');
+                    }
+                } catch (error) {
+                    showError('注册失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const logout = async () => {
+                setLoading(true, '退出中...');
+                try {
+                    const { error } = await sbClient.auth.signOut();
+                    if (error) throw error;
+                    setCurrentUser(null);
+                    applications.value = [];
+                    userList.value = [];
+                    currentTab.value = 'active';
+                    teacherStatusFilter.value = '全部';
+                    adminStatusFilter.value = '全部';
+                    adminKeyword.value = '';
+                    showApprovalModal.value = false;
+                    showRejectModal.value = false;
+                    currentApprovingItem.value = null;
+                    currentRejectingItem.value = null;
+                    approvalDateInput.value = '';
+                    rejectReasonInput.value = '';
+                    resetApplyForm();
+                } catch (error) {
+                    showError('退出失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const submitApply = async () => {
+                const content = applyForm.value.content.trim();
+                const duration = Number(applyForm.value.duration);
+                const applyDate = normalizeDateTimeInput(applyForm.value.date);
+                if (!content) return alert('请填写作业内容');
+                if (!Number.isFinite(duration) || duration <= 0) return alert('请填写有效的作业时长');
+                if (!applyDate) return alert('请填写布置时间');
+                const teacherName = displayUserName();
+                const payload = {
+                    user_id: currentUser.value.id,
+                    teacher_name: teacherName,
+                    grade: Number(applyForm.value.grade) || 1,
+                    subject: applyForm.value.subject || subjects[0],
+                    duration,
+                    date: applyDate,
+                    content,
+                    file_name: buildApplicationFileName({ teacherName, grade: Number(applyForm.value.grade) || 1, subject: applyForm.value.subject || subjects[0], date: applyDate }),
+                    status: '待审批',
+                    approval_time: null,
+                    approver_name: null,
+                    rejection_reason: null
+                };
+                setLoading(true, '提交审批中...');
+                try {
+                    const { error } = await sbClient.from('applications').insert(payload);
+                    if (error) throw error;
+                    resetApplyForm();
+                    await fetchApplications(false);
+                    alert('提交成功，已进入待审批队列。');
+                } catch (error) {
+                    showError('提交失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const updateStatus = async (item, status, options = {}) => {
+                if (!item?.id) return alert('未找到需要更新的记录');
+                const updateTime = normalizeDateTimeInput(options.time || new Date());
+                const updateData = {
+                    status,
+                    approval_time: updateTime,
+                    approver_name: displayUserName(),
+                    rejection_reason: status === '已驳回' ? (options.rejectionReason || '').trim() : null
+                };
+                setLoading(true, '更新审批状态...');
+                try {
+                    const { error } = await sbClient.from('applications').update(updateData).eq('id', item.id);
+                    if (error) throw error;
+                    showApprovalModal.value = false;
+                    showRejectModal.value = false;
+                    currentApprovingItem.value = null;
+                    currentRejectingItem.value = null;
+                    rejectReasonInput.value = '';
+                    await fetchApplications(false);
+                } catch (error) {
+                    showError('更新状态失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            const openApprovalModal = (app) => {
+                currentApprovingItem.value = app;
+                approvalDateInput.value = getLocalDateTimeInputValue();
+                showApprovalModal.value = true;
+            };
+            const openRejectModal = (app) => {
+                currentRejectingItem.value = app;
+                rejectReasonInput.value = app?.rejection_reason || '';
+                showRejectModal.value = true;
+            };
+            const confirmApproval = async () => {
+                if (!approvalDateInput.value) return alert('请选择审批通过时间');
+                await updateStatus(currentApprovingItem.value, '已通过', { time: approvalDateInput.value });
+            };
+            const confirmReject = async () => {
+                if (!rejectReasonInput.value.trim()) return alert('请填写驳回原因');
+                await updateStatus(currentRejectingItem.value, '已驳回', { rejectionReason: rejectReasonInput.value, time: new Date() });
+            };
+
+            const generateAndDownloadPDF = async (app) => {
+                setLoading(true, '生成 PDF 中...');
+                try {
+                    tempPdfData.value = {
+                        ...app,
+                        approval_time: app.approval_time || getLocalDateTimeInputValue(),
+                        approver_name: app.approver_name || '管理员'
+                    };
+                    await nextTick();
+                    await new Promise((resolve) => setTimeout(resolve, 160));
+                    const el = document.getElementById('pdf-template');
+                    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+                    const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
+                    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+                    pdf.save(`${app.file_name || '作业公示单'}.pdf`);
+                } catch (error) {
+                    showError('生成 PDF 失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const downloadUserTemplate = () => {
+                const data = [{ "账号(拼音)": "wanglaoshi", "姓名": "王老师", "密码(至少6位)": "123456", "身份(teacher/admin)": "teacher" }];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "账号模板");
+                XLSX.writeFile(wb, "批量账号导入模板.xlsx");
+            };
+
+            const handleImportUsers = async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                if (userRole.value !== 'admin') return alert('只有管理员可以导入账号');
+                setLoading(true, "读取账号模板中...");
+                try {
+                    const data = await file.arrayBuffer();
+                    const wb = XLSX.read(data);
+                    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                    const users = [];
+                    const localFailedRows = [];
+                    for (let i = 0; i < rows.length; i++) {
+                        const r = rows[i];
+                        const username = String(r["账号(拼音)"] || r["账号"] || '').trim();
+                        const name = String(r["姓名"] || '').trim();
+                        const password = String(r["密码(至少6位)"] || r["密码"] || '').trim();
+                        const role = String(r["身份(teacher/admin)"] || r["身份"] || "teacher").trim() === 'admin' ? 'admin' : 'teacher';
+                        if(!username || !name || password.length < 6) {
+                            localFailedRows.push(name || username || `第${i + 1}行`);
+                            continue;
+                        }
+                        users.push({
+                            username,
+                            name,
+                            password,
+                            role,
+                            rowLabel: `第${i + 1}行`
+                        });
+                    }
+
+                    if (!users.length) {
+                        return alert(`没有可导入的有效账号数据。\n无效行：${localFailedRows.join('、')}`);
+                    }
+
+                    loadingText.value = '调用服务器函数创建账号...';
+                    const { data: result, error } = await sbClient.functions.invoke(BULK_CREATE_USERS_FUNCTION, {
+                        body: { users }
+                    });
+                    if (error) throw error;
+                    if (!result?.ok) throw new Error(result?.error || '批量创建账号失败，请检查 Edge Function 是否已部署');
+
+                    await fetchUserList(false);
+                    const remoteFailedUsers = Array.isArray(result.failedUsers) ? result.failedUsers.map((item) => item.name || item.username || item.rowLabel || '未知账号') : [];
+                    const failedNames = [...localFailedRows, ...remoteFailedUsers];
+                    const success = Number(result.success || 0);
+                    const fail = failedNames.length;
+                    const extra = failedNames.length ? `\n失败账号：${failedNames.slice(0, 8).join('、')}${failedNames.length > 8 ? ' 等' : ''}` : '';
+                    const warningText = Array.isArray(result.warnings) && result.warnings.length ? `\n提示：${result.warnings.slice(0, 3).join('；')}` : '';
+                    alert(`导入完成\n成功：${success} 个\n失败：${fail} 个${extra}${warningText}`);
+                } catch(error) {
+                    showError("批量导入账号失败", error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const downloadImportTemplate = () => {
+                const data = [{ "年级": 1, "学科": "语文", "教师": "王老师", "作业内容": "背诵古诗并完成练习册第 12 页", "时长": 30, "布置时间": "2026-03-28 16:00" }];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "模板");
+                XLSX.writeFile(wb, "作业导入模板.xlsx");
+            };
+
+            const handleImportExcel = async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                setLoading(true, "解析导入文件中...");
+                try {
+                    const data = await file.arrayBuffer();
+                    const wb = XLSX.read(data);
+                    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                    const payload = rows.map(r => {
+                        const teacherName = String(r["教师"] || displayUserName()).trim();
+                        const subject = String(r["学科"] || "语文").trim() || "语文";
+                        const grade = Number(r["年级"]) || 1;
+                        const duration = Math.max(1, Number(r["时长"]) || 30);
+                        const content = String(r["作业内容"] || r["内容"] || '').trim();
+                        const date = normalizeDateTimeInput(r["布置时间"] || r["日期"] || new Date());
+                        if (!content) return null;
+                        return {
+                            user_id: currentUser.value.id,
+                            teacher_name: teacherName,
+                            grade,
+                            subject,
+                            duration,
+                            date,
+                            content,
+                            file_name: buildApplicationFileName({ teacherName, grade, subject, date }),
+                            status: '已通过',
+                            approval_time: getLocalDateTimeInputValue(),
+                            approver_name: displayUserName(),
+                            rejection_reason: null
+                        };
+                    }).filter(Boolean);
+                    if(!payload.length) return alert("导入文件中没有可写入的有效记录");
+                    const { error } = await sbClient.from('applications').insert(payload);
+                    if (error) throw error;
+                    await fetchApplications(false);
+                    alert(`成功导入 ${payload.length} 条历史作业记录`);
+                } catch(error) {
+                    showError("导入历史作业失败", error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const exportExcel = () => {
+                const d = sortRecords(applications.value).map(a => ({ "文件编号": a.file_name || '', "教师": a.teacher_name || '', "年级": a.grade || '', "学科": a.subject || '', "时长": a.duration || '', "布置时间": formatDateTime(a.date), "处理时间": formatDateTime(a.approval_time), "状态": a.status || '', "审批人": a.approver_name || '', "驳回原因": a.rejection_reason || '', "内容": a.content || '' }));
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d), "审批汇总");
+                XLSX.writeFile(wb, `作业审批汇总_${formatDateTime(new Date()).replace(/[-:\s]/g, '').slice(0, 12)}.xlsx`);
+            };
+
+            const copyFileName = async (text) => {
+                if (!text) return alert('没有可复制的文件编号');
+                try {
+                    if (!navigator.clipboard?.writeText) throw new Error('当前环境不支持系统剪贴板');
+                    await navigator.clipboard.writeText(text);
+                    alert('已复制文件编号');
+                } catch (error) {
+                    window.prompt('请手动复制以下文件编号：', text);
+                }
+            };
+            const switchTab = async (t) => {
+                currentTab.value = t;
+                if(t === 'active') await fetchApplications();
+                if(t === 'users') await fetchUserList(true);
+            };
+
+            return {
+                currentUser, userRole, authMode, loginForm, signupForm, applyForm,
+                applications, userList, currentTab, isLoading, loadingText, showApprovalModal, showRejectModal, approvalDateInput, rejectReasonInput,
+                tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword,
+                overviewStats, filteredTeacherApplications, filteredAdminApplications,
+                handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,
+                openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, generateAndDownloadPDF, copyFileName,
+                statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername,
+                roleLabel, roleBadgeClass, displayDuration, exportExcel, downloadImportTemplate, handleImportExcel,
+                downloadUserTemplate, handleImportUsers
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
