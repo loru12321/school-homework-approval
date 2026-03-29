@@ -13,7 +13,9 @@ const PDF_TEMPLATE_SETTING_KEY = "pdf_template";
 const PDF_EXPORT_BUCKET = "pdf-export-archives";
 const ACTIVE_JOB_STATUSES = new Set(["queued", "running"]);
 const FINISHED_JOB_STATUSES = new Set(["completed", "failed", "cancelled"]);
-const FONT_URL = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf";
+const FONT_URL =
+  "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf";
+
 const fontBytesPromise = fetch(FONT_URL).then(async (response) => {
   if (!response.ok) {
     throw new Error(`Font fetch failed: ${response.status} ${response.statusText}`);
@@ -90,7 +92,8 @@ const json = (status: number, body: Record<string, unknown>) =>
 
 const pad = (value: number | string) => String(value).padStart(2, "0");
 const toTrimmedString = (value: unknown) => String(value ?? "").trim();
-const sanitizeFileName = (value: unknown, fallback = "作业公示�?) => {
+
+const sanitizeFileName = (value: unknown, fallback = "homework-pdf") => {
   const safeName = String(value || fallback).replace(/[\\/:*?"<>|]+/g, "_").trim();
   return safeName || fallback;
 };
@@ -122,30 +125,30 @@ const formatDateToken = (value: unknown, withTime = true) => {
 };
 
 const buildDefaultPdfTemplateConfig = (): PdfTemplateConfig => ({
-  schoolName: "学校教务�?,
-  headerTitle: "作业公示�?,
+  schoolName: "School Office",
+  headerTitle: "Homework Notice",
   headerSubtitle: "HOMEWORK APPROVAL NOTICE",
-  signOffText: "学校教务�?,
-  sealLabel: "教务专用�?,
+  signOffText: "School Office",
+  sealLabel: "Academic Seal",
   sealOffsetX: 0,
   sealOffsetY: 0,
   pdfFileNamePattern: "{file_name}",
-  archiveFileNamePattern: "{mode}_{count}份_{timestamp}",
+  archiveFileNamePattern: "{mode}_{count}items_{timestamp}",
 });
 
 const normalizePdfTemplateConfig = (value: unknown): PdfTemplateConfig => {
   const source = typeof value === "object" && value ? value as Record<string, unknown> : {};
   const base = { ...buildDefaultPdfTemplateConfig(), ...source };
   return {
-    schoolName: toTrimmedString(base.schoolName) || "学校教务�?,
-    headerTitle: toTrimmedString(base.headerTitle) || "作业公示�?,
+    schoolName: toTrimmedString(base.schoolName) || "School Office",
+    headerTitle: toTrimmedString(base.headerTitle) || "Homework Notice",
     headerSubtitle: toTrimmedString(base.headerSubtitle),
-    signOffText: toTrimmedString(base.signOffText) || toTrimmedString(base.schoolName) || "学校教务�?,
+    signOffText: toTrimmedString(base.signOffText) || toTrimmedString(base.schoolName) || "School Office",
     sealLabel: toTrimmedString(base.sealLabel),
     sealOffsetX: Number.isFinite(Number(base.sealOffsetX)) ? Number(base.sealOffsetX) : 0,
     sealOffsetY: Number.isFinite(Number(base.sealOffsetY)) ? Number(base.sealOffsetY) : 0,
     pdfFileNamePattern: toTrimmedString(base.pdfFileNamePattern) || "{file_name}",
-    archiveFileNamePattern: toTrimmedString(base.archiveFileNamePattern) || "{mode}_{count}份_{timestamp}",
+    archiveFileNamePattern: toTrimmedString(base.archiveFileNamePattern) || "{mode}_{count}items_{timestamp}",
   };
 };
 
@@ -185,11 +188,12 @@ const buildPatternValues = (app: ExportItem, extra: Record<string, string | numb
   timestamp: toTrimmedString(extra.timestamp) || formatDateToken(new Date(), true),
 });
 
-const buildPdfFileBaseName = (app: ExportItem, config: PdfTemplateConfig) => renderTemplatePattern(
-  config.pdfFileNamePattern,
-  buildPatternValues(app, {}, config),
-  toTrimmedString(app.file_name) || "作业公示�?,
-);
+const buildPdfFileBaseName = (app: ExportItem, config: PdfTemplateConfig) =>
+  renderTemplatePattern(
+    config.pdfFileNamePattern,
+    buildPatternValues(app, {}, config),
+    toTrimmedString(app.file_name) || "homework-notice",
+  );
 
 const buildPdfArchiveName = (
   modeLabel: string,
@@ -203,10 +207,12 @@ const buildPdfArchiveName = (
   if (useFilters) {
     if (snapshot.grade !== "全部") fallbackParts.push(`${snapshot.grade}年级`);
     if (snapshot.subject !== "全部") fallbackParts.push(snapshot.subject);
-    if (snapshot.keyword) fallbackParts.push("关键词筛�?);
-    if (snapshot.dateFrom || snapshot.dateTo) fallbackParts.push(snapshot.dateField === "approval_time" ? "审批区间" : "布置区间");
+    if (snapshot.keyword) fallbackParts.push("keyword-filtered");
+    if (snapshot.dateFrom || snapshot.dateTo) {
+      fallbackParts.push(snapshot.dateField === "approval_time" ? "approval-range" : "assigned-range");
+    }
   }
-  fallbackParts.push(`${exportCount}份`);
+  fallbackParts.push(`${exportCount}items`);
   fallbackParts.push(formatDateToken(new Date(), true) || String(Date.now()));
   return `${renderTemplatePattern(
     config.archiveFileNamePattern,
@@ -225,12 +231,12 @@ const buildPdfArchiveName = (
 const buildPdfZipEntryPath = (app: ExportItem, folderMode: string, fileName: string) => {
   const folderParts: string[] = [];
   if (folderMode === "grade") {
-    folderParts.push(sanitizeFileName(`${toTrimmedString(app.grade) || "未分�?}年级`));
+    folderParts.push(sanitizeFileName(`${toTrimmedString(app.grade) || "ungraded"}-grade`));
   } else if (folderMode === "grade_subject") {
-    folderParts.push(sanitizeFileName(`${toTrimmedString(app.grade) || "未分�?}年级`));
-    folderParts.push(sanitizeFileName(toTrimmedString(app.subject) || "未分学科"));
+    folderParts.push(sanitizeFileName(`${toTrimmedString(app.grade) || "ungraded"}-grade`));
+    folderParts.push(sanitizeFileName(toTrimmedString(app.subject) || "unspecified-subject"));
   } else if (folderMode === "teacher") {
-    folderParts.push(sanitizeFileName(toTrimmedString(app.teacher_name) || "未命名教�?));
+    folderParts.push(sanitizeFileName(toTrimmedString(app.teacher_name) || "unnamed-teacher"));
   }
   return [...folderParts, fileName].join("/");
 };
@@ -279,17 +285,18 @@ const getEnv = (): EnvConfig => {
   return { supabaseUrl, anonKey, serviceRoleKey };
 };
 
-const createServiceClient = (env: EnvConfig) => createClient(env.supabaseUrl, env.serviceRoleKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-});
+const createServiceClient = (env: EnvConfig) =>
+  createClient(env.supabaseUrl, env.serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
 
 const resolveContext = async (req: Request): Promise<RequestContext> => {
   const env = getEnv();
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) throw new Error("未提供登录凭证�?);
+  if (!authHeader) throw new Error("Missing authorization header.");
 
   const userClient = createClient(env.supabaseUrl, env.anonKey, {
     global: { headers: { Authorization: authHeader } },
@@ -298,12 +305,14 @@ const resolveContext = async (req: Request): Promise<RequestContext> => {
       autoRefreshToken: false,
     },
   });
+
   const {
     data: { user },
     error: authError,
   } = await userClient.auth.getUser();
+
   if (authError || !user) {
-    throw new Error(authError?.message || "登录已失效，请重新登录�?);
+    throw new Error(authError?.message || "Login session expired.");
   }
 
   const adminClient = createServiceClient(env);
@@ -312,10 +321,11 @@ const resolveContext = async (req: Request): Promise<RequestContext> => {
     .select("role, full_name, username")
     .eq("id", user.id)
     .maybeSingle();
-  if (profileError) throw new Error(profileError.message || "读取管理员身份失败�?);
-  if (profile?.role !== "admin") throw new Error("只有管理员可以使用后�?PDF 导出任务�?);
 
-  const requesterName = toTrimmedString(profile?.full_name) || toTrimmedString(profile?.username) || "管理�?;
+  if (profileError) throw new Error(profileError.message || "Failed to load admin profile.");
+  if (profile?.role !== "admin") throw new Error("Only admins can use PDF export jobs.");
+
+  const requesterName = toTrimmedString(profile?.full_name) || toTrimmedString(profile?.username) || "Admin";
   return { env, adminClient, userId: user.id, requesterName };
 };
 
@@ -325,7 +335,8 @@ const fetchPdfTemplateConfig = async (adminClient: ReturnType<typeof createClien
     .select("setting_value")
     .eq("setting_key", PDF_TEMPLATE_SETTING_KEY)
     .maybeSingle();
-  if (error) throw new Error(error.message || "读取 PDF 配置失败�?);
+
+  if (error) throw new Error(error.message || "Failed to load PDF template config.");
   return normalizePdfTemplateConfig(data?.setting_value);
 };
 
@@ -335,7 +346,8 @@ const fetchJob = async (adminClient: ReturnType<typeof createClient>, jobId: str
     .select("*")
     .eq("id", jobId)
     .maybeSingle();
-  if (error) throw new Error(error.message || "读取 PDF 导出任务失败�?);
+
+  if (error) throw new Error(error.message || "Failed to load PDF export job.");
   return data as PdfExportJobRow | null;
 };
 
@@ -344,13 +356,14 @@ const updateJob = async (adminClient: ReturnType<typeof createClient>, jobId: st
     .from("pdf_export_jobs")
     .update(patch)
     .eq("id", jobId);
-  if (error) throw new Error(error.message || "更新 PDF 导出任务失败�?);
+
+  if (error) throw new Error(error.message || "Failed to update PDF export job.");
 };
 
 const removeArchiveIfPresent = async (adminClient: ReturnType<typeof createClient>, job: PdfExportJobRow | null) => {
   if (!job?.archive_path) return;
   const { error } = await adminClient.storage.from(PDF_EXPORT_BUCKET).remove([job.archive_path]);
-  if (error) throw new Error(error.message || "清理�?ZIP 文件失败�?);
+  if (error) throw new Error(error.message || "Failed to remove ZIP archive.");
 };
 
 const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
@@ -379,10 +392,10 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
     color: black,
   });
 
-  page.drawText(`年级�?{toTrimmedString(app.grade) || "--"}年级`, { x: 70, y: 668, size: 14, font, color: black });
-  drawRightText(page, font, `学科�?{toTrimmedString(app.subject) || "--"}`, 525, 668, 14, black);
-  page.drawText(`时长�?{toTrimmedString(app.duration) || "--"}分钟`, { x: 70, y: 638, size: 14, font, color: black });
-  drawRightText(page, font, `日期�?{formatDateOnly(app.date)}`, 525, 638, 14, black);
+  page.drawText(`年级：${toTrimmedString(app.grade) || "--"}年级`, { x: 70, y: 668, size: 14, font, color: black });
+  drawRightText(page, font, `学科：${toTrimmedString(app.subject) || "--"}`, 525, 668, 14, black);
+  page.drawText(`时长：${toTrimmedString(app.duration) || "--"}分钟`, { x: 70, y: 638, size: 14, font, color: black });
+  drawRightText(page, font, `日期：${formatDateOnly(app.date)}`, 525, 638, 14, black);
 
   page.drawRectangle({
     x: 60,
@@ -414,10 +427,9 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
     thickness: 1.1,
     color: black,
   });
-  page.drawText("双减要求：符�?, { x: 70, y: 260, size: 14, font, color: black });
-
-  page.drawText(`审核人：${toTrimmedString(app.approver_name) || "管理�?}`, { x: 70, y: 188, size: 14, font, color: black });
-  page.drawText(`时间�?{formatDateOnly(app.approval_time)}`, { x: 70, y: 160, size: 14, font, color: black });
+  page.drawText("双减要求：符合", { x: 70, y: 260, size: 14, font, color: black });
+  page.drawText(`审核人：${toTrimmedString(app.approver_name) || "Admin"}`, { x: 70, y: 188, size: 14, font, color: black });
+  page.drawText(`时间：${formatDateOnly(app.approval_time)}`, { x: 70, y: 160, size: 14, font, color: black });
 
   drawRightText(page, font, config.signOffText || config.schoolName, 520, 190, 14, black);
   drawRightText(page, font, formatDateOnly(app.approval_time), 520, 162, 14, black);
@@ -456,8 +468,7 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
 const processPdfExportJob = async (env: EnvConfig, jobId: string) => {
   const adminClient = createServiceClient(env);
   const sourceJob = await fetchJob(adminClient, jobId);
-  if (!sourceJob) return;
-  if (sourceJob.status === "cancelled") return;
+  if (!sourceJob || sourceJob.status === "cancelled") return;
 
   const pdfConfig = await fetchPdfTemplateConfig(adminClient);
   const items = Array.isArray(sourceJob.items) ? sourceJob.items : [];
@@ -475,21 +486,21 @@ const processPdfExportJob = async (env: EnvConfig, jobId: string) => {
     finished_at: null,
     archive_name: archiveName,
     archive_path: null,
-    progress_text: items.length ? `准备生成 1/${items.length} �?PDF...` : "准备生成 ZIP 文件...",
+    progress_text: items.length ? `Preparing 1/${items.length} PDF...` : "Preparing ZIP archive...",
     error_message: "",
     cancel_requested: false,
     completed_count: 0,
   });
 
   try {
-    if (!items.length) throw new Error("当前任务没有可导出的记录�?);
+    if (!items.length) throw new Error("No records available for export.");
 
     const zip = new JSZip();
     const usedPaths = new Set<string>();
 
     for (let i = 0; i < items.length; i += 1) {
       const latestJob = await fetchJob(adminClient, jobId);
-      if (!latestJob) throw new Error("导出任务不存在�?);
+      if (!latestJob) throw new Error("Export job was not found.");
       if (latestJob.cancel_requested || latestJob.status === "cancelled") {
         throw new Error("__PDF_EXPORT_CANCELLED__");
       }
@@ -509,8 +520,8 @@ const processPdfExportJob = async (env: EnvConfig, jobId: string) => {
       await updateJob(adminClient, jobId, {
         completed_count: i + 1,
         progress_text: i + 1 >= items.length
-          ? "正在打包 ZIP 文件..."
-          : `正在生成�?${i + 2}/${items.length} �?PDF...`,
+          ? "Building ZIP archive..."
+          : `Generating ${i + 2}/${items.length} PDF...`,
       });
     }
 
@@ -519,12 +530,13 @@ const processPdfExportJob = async (env: EnvConfig, jobId: string) => {
       compression: "DEFLATE",
       compressionOptions: { level: 6 },
     });
+
     const archivePath = `jobs/${jobId}/${sanitizeFileName(archiveName, "pdf-export.zip")}`;
     const uploadResult = await adminClient.storage.from(PDF_EXPORT_BUCKET).upload(archivePath, zipBytes, {
       upsert: true,
       contentType: "application/zip",
     });
-    if (uploadResult.error) throw new Error(uploadResult.error.message || "上传 ZIP 失败�?);
+    if (uploadResult.error) throw new Error(uploadResult.error.message || "Failed to upload ZIP archive.");
 
     await updateJob(adminClient, jobId, {
       status: "completed",
@@ -532,7 +544,7 @@ const processPdfExportJob = async (env: EnvConfig, jobId: string) => {
       completed_count: items.length,
       archive_name: archiveName,
       archive_path: archivePath,
-      progress_text: `已生�?${items.length} �?PDF，可下载 ZIP。`,
+      progress_text: `Generated ${items.length} PDFs. ZIP is ready.`,
       error_message: "",
       cancel_requested: false,
     });
@@ -543,9 +555,9 @@ const processPdfExportJob = async (env: EnvConfig, jobId: string) => {
       status: isCancelled ? "cancelled" : "failed",
       finished_at: new Date().toISOString(),
       progress_text: isCancelled
-        ? `任务已取消，停止�?${latestJob?.completed_count || 0}/${latestJob?.total_count || items.length} 份。`
-        : `生成失败，已完成 ${latestJob?.completed_count || 0}/${latestJob?.total_count || items.length} 份。`,
-      error_message: isCancelled ? "" : (error instanceof Error ? error.message : "后台导出 ZIP 失败�?),
+        ? `Job cancelled at ${latestJob?.completed_count || 0}/${latestJob?.total_count || items.length}.`
+        : `Job failed at ${latestJob?.completed_count || 0}/${latestJob?.total_count || items.length}.`,
+      error_message: isCancelled ? "" : (error instanceof Error ? error.message : "Background ZIP export failed."),
       cancel_requested: false,
     }).catch((innerError) => {
       console.error("Failed to update PDF export job after error.", innerError);
@@ -579,13 +591,13 @@ Deno.serve(async (req: Request) => {
 
     if (action === "queue") {
       const items = Array.isArray(body?.items) ? body.items as ExportItem[] : [];
-      if (!items.length) return json(400, { ok: false, error: "当前没有可导出的 PDF 记录�? });
-      if (items.length > 200) return json(400, { ok: false, error: "单次最多提�?200 �?PDF，请拆分后重试�? });
+      if (!items.length) return json(400, { ok: false, error: "No records available for export." });
+      if (items.length > 200) return json(400, { ok: false, error: "A single export can include at most 200 PDFs." });
 
       const filterSnapshot = snapshotFilter(body?.filterSnapshot);
       const pdfConfig = await fetchPdfTemplateConfig(context.adminClient);
       const archiveName = buildPdfArchiveName(
-        toTrimmedString(body?.modeLabel) || "作业公示 PDF",
+        toTrimmedString(body?.modeLabel) || "PDF Export",
         items.length,
         body?.useFilters !== false,
         filterSnapshot,
@@ -598,23 +610,24 @@ Deno.serve(async (req: Request) => {
           created_by: context.userId,
           created_by_name: context.requesterName,
           status: "queued",
-          mode_label: toTrimmedString(body?.modeLabel) || "作业公示 PDF",
+          mode_label: toTrimmedString(body?.modeLabel) || "PDF Export",
           filter_snapshot: filterSnapshot,
-          filter_summary: toTrimmedString(body?.filterSummary) || "全部已通过",
+          filter_summary: toTrimmedString(body?.filterSummary) || "All approved",
           folder_mode: filterSnapshot.folderMode,
           items,
           total_count: items.length,
           completed_count: 0,
           archive_name: archiveName,
           archive_path: null,
-          progress_text: `等待处理，计划生�?${items.length} �?PDF。`,
+          progress_text: `Queued ${items.length} PDFs.`,
           error_message: "",
           use_filters: body?.useFilters !== false,
           cancel_requested: false,
         })
         .select("*")
         .single();
-      if (error || !job) throw new Error(error?.message || "创建 PDF 导出任务失败�?);
+
+      if (error || !job) throw new Error(error?.message || "Failed to create PDF export job.");
 
       enqueueBackgroundJob(context.env, String(job.id));
       return json(200, { ok: true, job });
@@ -622,18 +635,21 @@ Deno.serve(async (req: Request) => {
 
     if (action === "signed_url") {
       const jobId = toTrimmedString(body?.jobId);
-      if (!jobId) return json(400, { ok: false, error: "缺少 jobId�? });
+      if (!jobId) return json(400, { ok: false, error: "Missing jobId." });
       const job = await fetchJob(context.adminClient, jobId);
-      if (!job) return json(404, { ok: false, error: "没有找到对应的导出任务�? });
+      if (!job) return json(404, { ok: false, error: "Export job not found." });
       if (job.status !== "completed" || !job.archive_path) {
-        return json(400, { ok: false, error: "该任务尚未生成可下载 ZIP�? });
+        return json(400, { ok: false, error: "This job does not have a downloadable ZIP yet." });
       }
+
       const signed = await context.adminClient.storage
         .from(PDF_EXPORT_BUCKET)
         .createSignedUrl(job.archive_path, 60 * 15, { download: job.archive_name || true });
+
       if (signed.error || !signed.data?.signedUrl) {
-        throw new Error(signed.error?.message || "生成下载链接失败�?);
+        throw new Error(signed.error?.message || "Failed to create signed download URL.");
       }
+
       return json(200, {
         ok: true,
         url: signed.data.signedUrl,
@@ -643,33 +659,36 @@ Deno.serve(async (req: Request) => {
 
     if (action === "cancel") {
       const jobId = toTrimmedString(body?.jobId);
-      if (!jobId) return json(400, { ok: false, error: "缺少 jobId�? });
+      if (!jobId) return json(400, { ok: false, error: "Missing jobId." });
       const job = await fetchJob(context.adminClient, jobId);
-      if (!job) return json(404, { ok: false, error: "没有找到对应的导出任务�? });
+      if (!job) return json(404, { ok: false, error: "Export job not found." });
+
       if (job.status === "queued") {
         await updateJob(context.adminClient, jobId, {
           status: "cancelled",
           finished_at: new Date().toISOString(),
-          progress_text: `任务已取消，停止�?${job.completed_count}/${job.total_count} 份。`,
+          progress_text: `Job cancelled at ${job.completed_count}/${job.total_count}.`,
           cancel_requested: false,
         });
       } else if (job.status === "running") {
         await updateJob(context.adminClient, jobId, {
           cancel_requested: true,
-          progress_text: "正在停止导出任务...",
+          progress_text: "Cancelling export job...",
         });
       }
+
       return json(200, { ok: true });
     }
 
     if (action === "retry") {
       const jobId = toTrimmedString(body?.jobId);
-      if (!jobId) return json(400, { ok: false, error: "缺少 jobId�? });
+      if (!jobId) return json(400, { ok: false, error: "Missing jobId." });
       const job = await fetchJob(context.adminClient, jobId);
-      if (!job) return json(404, { ok: false, error: "没有找到对应的导出任务�? });
+      if (!job) return json(404, { ok: false, error: "Export job not found." });
       if (ACTIVE_JOB_STATUSES.has(job.status)) {
-        return json(400, { ok: false, error: "运行中的任务不能重新生成，请先取消�? });
+        return json(400, { ok: false, error: "Cancel the running job before retrying it." });
       }
+
       await removeArchiveIfPresent(context.adminClient, job);
       const pdfConfig = await fetchPdfTemplateConfig(context.adminClient);
       await updateJob(context.adminClient, jobId, {
@@ -678,26 +697,34 @@ Deno.serve(async (req: Request) => {
         finished_at: null,
         completed_count: 0,
         archive_path: null,
-        archive_name: buildPdfArchiveName(job.mode_label, job.total_count, job.use_filters !== false, job.filter_snapshot || {}, pdfConfig),
-        progress_text: `等待处理，计划生�?${job.total_count} �?PDF。`,
+        archive_name: buildPdfArchiveName(
+          job.mode_label,
+          job.total_count,
+          job.use_filters !== false,
+          job.filter_snapshot || {},
+          pdfConfig,
+        ),
+        progress_text: `Queued ${job.total_count} PDFs.`,
         error_message: "",
         cancel_requested: false,
       });
+
       enqueueBackgroundJob(context.env, jobId);
       return json(200, { ok: true });
     }
 
     if (action === "delete") {
       const jobId = toTrimmedString(body?.jobId);
-      if (!jobId) return json(400, { ok: false, error: "缺少 jobId�? });
+      if (!jobId) return json(400, { ok: false, error: "Missing jobId." });
       const job = await fetchJob(context.adminClient, jobId);
-      if (!job) return json(404, { ok: false, error: "没有找到对应的导出任务�? });
+      if (!job) return json(404, { ok: false, error: "Export job not found." });
       if (job.status === "running") {
-        return json(400, { ok: false, error: "请先停止当前导出任务，再删除记录�? });
+        return json(400, { ok: false, error: "Stop the running job before deleting it." });
       }
+
       await removeArchiveIfPresent(context.adminClient, job);
       const { error } = await context.adminClient.from("pdf_export_jobs").delete().eq("id", jobId);
-      if (error) throw new Error(error.message || "删除 PDF 导出任务失败�?);
+      if (error) throw new Error(error.message || "Failed to delete PDF export job.");
       return json(200, { ok: true });
     }
 
@@ -706,26 +733,29 @@ Deno.serve(async (req: Request) => {
         .from("pdf_export_jobs")
         .select("id, archive_path, status")
         .in("status", Array.from(FINISHED_JOB_STATUSES));
-      if (error) throw new Error(error.message || "读取可清理的导出任务失败�?);
+
+      if (error) throw new Error(error.message || "Failed to list finished export jobs.");
+
       const removableJobs = Array.isArray(jobs) ? jobs : [];
       const archivePaths = removableJobs.map((job) => toTrimmedString(job.archive_path)).filter(Boolean);
       if (archivePaths.length) {
         const removeResult = await context.adminClient.storage.from(PDF_EXPORT_BUCKET).remove(archivePaths);
-        if (removeResult.error) throw new Error(removeResult.error.message || "清理 ZIP 文件失败�?);
+        if (removeResult.error) throw new Error(removeResult.error.message || "Failed to remove ZIP archives.");
       }
+
       if (removableJobs.length) {
         const deleteResult = await context.adminClient.from("pdf_export_jobs").delete().in("id", removableJobs.map((job) => job.id));
-        if (deleteResult.error) throw new Error(deleteResult.error.message || "清理导出任务失败�?);
+        if (deleteResult.error) throw new Error(deleteResult.error.message || "Failed to clear finished export jobs.");
       }
+
       return json(200, { ok: true, count: removableJobs.length });
     }
 
-    return json(400, { ok: false, error: "不支持的 action�? });
+    return json(400, { ok: false, error: "Unsupported action." });
   } catch (error) {
     return json(500, {
       ok: false,
-      error: error instanceof Error ? error.message : "处理 PDF 导出任务时发生未知错误�?,
+      error: error instanceof Error ? error.message : "Unknown PDF export job error.",
     });
   }
 });
-
