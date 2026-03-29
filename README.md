@@ -44,7 +44,7 @@ supabase db push
 Set the secret used by the Edge Function:
 
 ```bash
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+supabase secrets set PROJECT_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
 Deploy the Edge Function:

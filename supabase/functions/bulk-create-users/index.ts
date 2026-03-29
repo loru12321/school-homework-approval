@@ -37,13 +37,13 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = Deno.env.get("PROJECT_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const authHeader = req.headers.get("Authorization");
 
     if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
       return json(500, {
         ok: false,
-        error: "缺少 Supabase 环境变量，请确认函数环境已配置 SUPABASE_URL、SUPABASE_ANON_KEY 和 SUPABASE_SERVICE_ROLE_KEY。",
+          error: "缺少 Supabase 环境变量，请确认函数环境已配置 SUPABASE_URL、SUPABASE_ANON_KEY 和 PROJECT_SERVICE_ROLE_KEY。",
       });
     }
 

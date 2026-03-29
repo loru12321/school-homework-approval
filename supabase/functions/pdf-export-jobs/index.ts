@@ -272,9 +272,9 @@ const drawRightText = (
 const getEnv = (): EnvConfig => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = Deno.env.get("PROJECT_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    throw new Error("缺少 Supabase 环境变量，请确认已配�?SUPABASE_URL、SUPABASE_ANON_KEY �?SUPABASE_SERVICE_ROLE_KEY�?);
+    throw new Error("Missing Supabase env vars: SUPABASE_URL, SUPABASE_ANON_KEY, and PROJECT_SERVICE_ROLE_KEY.");
   }
   return { supabaseUrl, anonKey, serviceRoleKey };
 };
