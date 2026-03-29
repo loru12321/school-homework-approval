@@ -68,6 +68,6 @@ node scripts/bootstrap-admin.mjs
 ## Notes
 
 - The Supabase CLI was not available in the current local environment during development, so the migration and Edge Function files were added to the repository but still need to be deployed in your Supabase project.
-- The `pdf-export-jobs` function bundles an open-source CJK font asset so backend-generated PDFs can render Chinese text correctly.
+- The `pdf-export-jobs` function fetches an open-source CJK font at runtime so backend-generated PDFs can render Chinese text correctly.
 - GitHub Pages serves `index.html` from the repository root, so entering the site URL opens the system directly.
 - PDF export archives are stored in the private Supabase Storage bucket `pdf-export-archives`, and the web app downloads them through signed URLs.
