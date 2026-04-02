@@ -113,10 +113,10 @@ insert into public.app_settings (setting_key, setting_value)
 values (
   'pdf_template',
   '{
-    "schoolName": "学校教务处",
+    "schoolName": "银山镇实验学校教务处",
     "headerTitle": "作业公示单",
     "headerSubtitle": "HOMEWORK APPROVAL NOTICE",
-    "signOffText": "学校教务处",
+    "signOffText": "银山镇实验学校教务处",
     "pdfFileNamePattern": "{file_name}",
     "archiveFileNamePattern": "{mode}_{count}份_{timestamp}"
   }'::jsonb

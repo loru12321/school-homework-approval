@@ -122,10 +122,10 @@ const formatDateToken = (value: unknown, withTime = true) => {
 };
 
 const buildDefaultPdfTemplateConfig = (): PdfTemplateConfig => ({
-  schoolName: "School Office",
+  schoolName: "银山镇实验学校教务处",
   headerTitle: "Homework Notice",
   headerSubtitle: "HOMEWORK APPROVAL NOTICE",
-  signOffText: "School Office",
+  signOffText: "银山镇实验学校教务处",
   pdfFileNamePattern: "{file_name}",
   archiveFileNamePattern: "{mode}_{count}items_{timestamp}",
 });
@@ -134,10 +134,10 @@ const normalizePdfTemplateConfig = (value: unknown): PdfTemplateConfig => {
   const source = typeof value === "object" && value ? value as Record<string, unknown> : {};
   const base = { ...buildDefaultPdfTemplateConfig(), ...source };
   return {
-    schoolName: toTrimmedString(base.schoolName) || "School Office",
+    schoolName: toTrimmedString(base.schoolName) || "银山镇实验学校教务处",
     headerTitle: toTrimmedString(base.headerTitle) || "Homework Notice",
     headerSubtitle: toTrimmedString(base.headerSubtitle),
-    signOffText: toTrimmedString(base.signOffText) || toTrimmedString(base.schoolName) || "School Office",
+    signOffText: toTrimmedString(base.signOffText) || toTrimmedString(base.schoolName) || "银山镇实验学校教务处",
     pdfFileNamePattern: toTrimmedString(base.pdfFileNamePattern) || "{file_name}",
     archiveFileNamePattern: toTrimmedString(base.archiveFileNamePattern) || "{mode}_{count}items_{timestamp}",
   };

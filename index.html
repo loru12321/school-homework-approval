@@ -600,7 +600,7 @@
                                 <input v-model.trim="pdfTemplateForm.schoolName" class="input-chinese p-3 rounded-xl text-sm" placeholder="学校名称">
                                 <input v-model.trim="pdfTemplateForm.headerTitle" class="input-chinese p-3 rounded-xl text-sm" placeholder="页眉主标题">
                                 <input v-model.trim="pdfTemplateForm.headerSubtitle" class="input-chinese p-3 rounded-xl text-sm" placeholder="页眉副标题（可选）">
-                                <input v-model.trim="pdfTemplateForm.signOffText" class="input-chinese p-3 rounded-xl text-sm" placeholder="落款，例如：学校教务处">
+                                <input v-model.trim="pdfTemplateForm.signOffText" class="input-chinese p-3 rounded-xl text-sm" placeholder="落款，例如：银山镇实验学校教务处">
                                 <input v-model.trim="pdfTemplateForm.pdfFileNamePattern" class="input-chinese p-3 rounded-xl text-sm md:col-span-2" placeholder="PDF 命名规则">
                                 <input v-model.trim="pdfTemplateForm.archiveFileNamePattern" class="input-chinese p-3 rounded-xl text-sm md:col-span-2" placeholder="ZIP 命名规则">
                             </div>
@@ -815,10 +815,10 @@
         folderMode: 'flat'
     });
     const buildDefaultPdfTemplateConfig = () => ({
-        schoolName: '学校教务处',
+        schoolName: '银山镇实验学校教务处',
         headerTitle: '作业公示单',
         headerSubtitle: 'HOMEWORK APPROVAL NOTICE',
-        signOffText: '学校教务处',
+        signOffText: '银山镇实验学校教务处',
         pdfFileNamePattern: '{file_name}',
         archiveFileNamePattern: '{mode}_{count}份_{timestamp}'
     });
@@ -828,10 +828,10 @@
             ...(value || {})
         };
         return {
-            schoolName: String(base.schoolName || '').trim() || '学校教务处',
+            schoolName: String(base.schoolName || '').trim() || '银山镇实验学校教务处',
             headerTitle: String(base.headerTitle || '').trim() || '作业公示单',
             headerSubtitle: String(base.headerSubtitle || '').trim(),
-            signOffText: String(base.signOffText || '').trim() || String(base.schoolName || '').trim() || '学校教务处',
+            signOffText: String(base.signOffText || '').trim() || String(base.schoolName || '').trim() || '银山镇实验学校教务处',
             pdfFileNamePattern: String(base.pdfFileNamePattern || '').trim() || '{file_name}',
             archiveFileNamePattern: String(base.archiveFileNamePattern || '').trim() || '{mode}_{count}份_{timestamp}'
         };
