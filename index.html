@@ -10,7 +10,6 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <script>
@@ -100,10 +99,44 @@
             color: #8C8177;
             font-size: 12px;
         }
+        .progress-bar-track {
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(216, 209, 194, 0.55);
+            overflow: hidden;
+        }
+        .distribution-bar {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #8E354A 0%, #B55B73 100%);
+        }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .pdf-title { font-size: 22pt; font-weight: bold; font-family: "SimSun", serif; }
         .pdf-label { font-family: "SimSun", serif; font-weight: bold; font-size: 14pt; }
         .pdf-value { font-family: "SimSun", serif; font-size: 14pt; }
+        .pdf-header-note { font-family: "SimSun", serif; font-size: 11pt; letter-spacing: 0.35em; }
+        .pdf-signoff { position: relative; min-width: 220px; min-height: 120px; }
+        .pdf-stamp {
+            position: absolute;
+            right: 10px;
+            bottom: 0;
+            width: 94px;
+            height: 94px;
+            border: 3px solid rgba(186, 39, 39, 0.75);
+            border-radius: 50%;
+            color: rgba(186, 39, 39, 0.82);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            line-height: 1.25;
+            font-family: "SimSun", serif;
+            font-size: 11pt;
+            font-weight: bold;
+            padding: 10px;
+            transform-origin: center;
+            background: rgba(255, 255, 255, 0.18);
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col font-sans text-ink">
@@ -268,7 +301,7 @@
 
                 <!-- === 管理员端 === -->
                 <div v-if="userRole === 'admin'" class="space-y-4">
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
                         <div class="summary-card">
                             <div class="text-xs text-slate-warm mb-1">全部记录</div>
                             <div class="text-2xl font-bold">{{ overviewStats.total }}</div>
@@ -285,17 +318,105 @@
                             <div class="text-xs text-slate-warm mb-1">已驳回</div>
                             <div class="text-2xl font-bold text-red-500">{{ overviewStats.rejected }}</div>
                         </div>
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">今日提交</div>
+                            <div class="text-2xl font-bold text-blue-600">{{ adminDashboardStats.todaySubmissions }}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">本周审批</div>
+                            <div class="text-2xl font-bold text-amber-700">{{ adminDashboardStats.weeklyReviewed }}</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="text-xs text-slate-warm mb-1">驳回率</div>
+                            <div class="text-2xl font-bold text-china-red">{{ adminDashboardStats.rejectionRateLabel }}</div>
+                        </div>
                     </div>
 
                     <div v-if="currentTab === 'active'" class="space-y-4">
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                            <div class="bg-white rounded-2xl shadow p-4 border border-[#E7E0D3]">
+                                <div class="flex items-start justify-between gap-3 mb-4">
+                                    <div>
+                                        <h3 class="font-bold text-lg text-ink">各年级分布</h3>
+                                        <p class="text-xs text-slate-warm mt-1">按当前系统全部申报记录统计，可快速判断工作量集中在哪些年级。</p>
+                                    </div>
+                                    <div class="text-xs text-slate-warm">{{ adminGradeDistribution.length }} 个年级</div>
+                                </div>
+                                <div v-if="adminGradeDistribution.length" class="space-y-3">
+                                    <div v-for="item in adminGradeDistribution" :key="`grade-distribution-${item.key}`">
+                                        <div class="flex justify-between items-center text-sm mb-1.5">
+                                            <span class="font-semibold text-ink">{{ item.label }}</span>
+                                            <span class="text-slate-warm">{{ item.count }} 条</span>
+                                        </div>
+                                        <div class="progress-bar-track">
+                                            <div class="distribution-bar" :style="{ width: `${item.percent}%` }"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="text-center text-gray-400 py-8 text-sm">暂无年级统计数据</div>
+                            </div>
+
+                            <div class="bg-white rounded-2xl shadow p-4 border border-[#E7E0D3]">
+                                <div class="flex items-start justify-between gap-3 mb-4">
+                                    <div>
+                                        <h3 class="font-bold text-lg text-ink">各学科分布</h3>
+                                        <p class="text-xs text-slate-warm mt-1">帮助管理员先看清学科分布，再按批次安排审批与导出。</p>
+                                    </div>
+                                    <div class="text-xs text-slate-warm">{{ adminSubjectDistribution.length }} 门学科</div>
+                                </div>
+                                <div v-if="adminSubjectDistribution.length" class="space-y-3">
+                                    <div v-for="item in adminSubjectDistribution" :key="`subject-distribution-${item.key}`">
+                                        <div class="flex justify-between items-center text-sm mb-1.5">
+                                            <span class="font-semibold text-ink">{{ item.label }}</span>
+                                            <span class="text-slate-warm">{{ item.count }} 条</span>
+                                        </div>
+                                        <div class="progress-bar-track">
+                                            <div class="distribution-bar" :style="{ width: `${item.percent}%` }"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="text-center text-gray-400 py-8 text-sm">暂无学科统计数据</div>
+                            </div>
+                        </div>
+
                         <div class="bg-white rounded-2xl shadow p-4 border border-[#E7E0D3]">
                             <div class="flex flex-col gap-3">
                                 <div class="flex flex-col sm:flex-row gap-3">
                                     <input v-model.trim="adminKeyword" type="search" class="input-chinese flex-1 px-4 py-3 rounded-xl" placeholder="搜索教师、文件编号、学科或内容">
                                     <button @click="fetchApplications" class="px-4 py-3 rounded-xl border border-[#D8D1C2] font-bold text-slate-warm">刷新数据</button>
                                 </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                                    <select v-model="adminFilters.grade" class="input-chinese p-3 rounded-xl text-sm">
+                                        <option value="全部">全部年级</option>
+                                        <option v-for="grade in gradeOptions" :key="`admin-grade-${grade}`" :value="String(grade)">{{ grade }}年级</option>
+                                    </select>
+                                    <select v-model="adminFilters.subject" class="input-chinese p-3 rounded-xl text-sm">
+                                        <option value="全部">全部学科</option>
+                                        <option v-for="subject in subjects" :key="`admin-subject-${subject}`" :value="subject">{{ subject }}</option>
+                                    </select>
+                                    <select v-model="adminFilters.teacher" class="input-chinese p-3 rounded-xl text-sm">
+                                        <option value="全部">全部教师</option>
+                                        <option v-for="teacher in adminTeacherOptions" :key="`admin-teacher-${teacher}`" :value="teacher">{{ teacher }}</option>
+                                    </select>
+                                    <select v-model="adminFilters.dateField" class="input-chinese p-3 rounded-xl text-sm">
+                                        <option v-for="option in pdfDateFieldOptions" :key="`admin-date-field-${option.value}`" :value="option.value">{{ option.label }}</option>
+                                    </select>
+                                    <input v-model="adminFilters.dateFrom" type="datetime-local" class="input-chinese p-3 rounded-xl text-sm" placeholder="开始时间">
+                                    <input v-model="adminFilters.dateTo" type="datetime-local" class="input-chinese p-3 rounded-xl text-sm" placeholder="结束时间">
+                                </div>
                                 <div class="flex gap-2 overflow-x-auto pb-1">
                                     <button v-for="status in statusOptions" :key="`admin-${status}`" @click="adminStatusFilter = status" :class="['filter-chip', adminStatusFilter === status ? 'active' : '']">{{ status }}</button>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button @click="setAdminRecentDays(7)" class="px-3 py-2 rounded-full border border-[#D8D1C2] text-xs font-bold text-slate-warm">最近 7 天</button>
+                                    <button @click="setAdminRecentDays(30)" class="px-3 py-2 rounded-full border border-[#D8D1C2] text-xs font-bold text-slate-warm">最近 30 天</button>
+                                    <button @click="clearAdminDateRange" class="px-3 py-2 rounded-full border border-[#D8D1C2] text-xs font-bold text-slate-warm">清空时间</button>
+                                    <button @click="resetAdminFilters" class="px-3 py-2 rounded-full border border-[#D8D1C2] text-xs font-bold text-slate-warm">重置筛选</button>
+                                </div>
+                                <div class="bg-[#FCFBF8] border border-[#E7E0D3] rounded-xl px-4 py-3 text-sm">
+                                    <div class="font-bold text-ink">当前筛选命中 {{ filteredAdminSummary.total }} 条记录</div>
+                                    <div class="text-xs text-slate-warm mt-1">覆盖 {{ filteredAdminSummary.teacherCount }} 位教师 · {{ filteredAdminSummary.pendingCount }} 条待审批 · {{ filteredAdminSummary.reviewedCount }} 条已处理</div>
+                                    <div class="text-xs text-slate-warm mt-1">{{ hasAdminFiltersApplied ? '审批列表已按条件筛选，可直接批量处理。' : '当前未附加年级 / 学科 / 教师 / 时间区间条件。' }}</div>
                                 </div>
                             </div>
                         </div>
@@ -445,7 +566,7 @@
                                 <div class="border border-[#E7E0D3] rounded-2xl p-4 bg-[#FCFBF8] space-y-4">
                                     <div class="flex flex-col gap-2">
                                         <div class="font-bold text-ink">PDF 条件导出</div>
-                                        <p class="text-xs text-slate-warm">支持按年级、学科、关键词和时间区间筛选，也支持在 ZIP 内按年级、学科或教师自动分文件夹归档。现在会进入下载中心队列，生成完成后可重复下载。</p>
+                                        <p class="text-xs text-slate-warm">支持按年级、学科、关键词和时间区间筛选，也支持在 ZIP 内按年级、学科或教师自动分文件夹归档。现在点击后会提交 Supabase 后台任务，前端只负责查看进度与下载结果。</p>
                                     </div>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <select v-model="pdfExportFilters.grade" class="input-chinese p-3 rounded-xl text-sm">
@@ -491,8 +612,36 @@
                         <div class="bg-white rounded-2xl shadow p-5 border border-[#E7E0D3]">
                             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                                 <div>
+                                    <h3 class="font-bold text-lg">PDF 模板配置</h3>
+                                    <p class="text-xs text-slate-warm mt-1">学校名称、页眉、落款、章位和文件命名规则都可以直接保存到系统配置，无需再改页面代码。</p>
+                                </div>
+                                <div class="text-xs text-slate-warm break-all">当前 PDF 名称预览：{{ pdfTemplatePreview.fileName }}</div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <input v-model.trim="pdfTemplateForm.schoolName" class="input-chinese p-3 rounded-xl text-sm" placeholder="学校名称">
+                                <input v-model.trim="pdfTemplateForm.headerTitle" class="input-chinese p-3 rounded-xl text-sm" placeholder="页眉主标题">
+                                <input v-model.trim="pdfTemplateForm.headerSubtitle" class="input-chinese p-3 rounded-xl text-sm" placeholder="页眉副标题（可选）">
+                                <input v-model.trim="pdfTemplateForm.signOffText" class="input-chinese p-3 rounded-xl text-sm" placeholder="落款，例如：学校教务处">
+                                <input v-model.trim="pdfTemplateForm.sealLabel" class="input-chinese p-3 rounded-xl text-sm" placeholder="章位文字，例如：教务专用章">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <input v-model.number="pdfTemplateForm.sealOffsetX" type="number" class="input-chinese p-3 rounded-xl text-sm" placeholder="章位横向偏移">
+                                    <input v-model.number="pdfTemplateForm.sealOffsetY" type="number" class="input-chinese p-3 rounded-xl text-sm" placeholder="章位纵向偏移">
+                                </div>
+                                <input v-model.trim="pdfTemplateForm.pdfFileNamePattern" class="input-chinese p-3 rounded-xl text-sm md:col-span-2" placeholder="PDF 命名规则">
+                                <input v-model.trim="pdfTemplateForm.archiveFileNamePattern" class="input-chinese p-3 rounded-xl text-sm md:col-span-2" placeholder="ZIP 命名规则">
+                            </div>
+                            <div class="text-xs text-slate-warm leading-6 mt-4">支持占位符：{school} {teacher} {grade} {subject} {file_name} {date} {date_time} {approval_date} {approval_time} {mode} {count} {timestamp}</div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                                <button @click="savePdfTemplateConfig" class="bg-china-red text-white py-3 rounded-xl font-bold text-sm">保存 PDF 配置</button>
+                                <button @click="resetPdfTemplateForm" class="border border-[#D8D1C2] text-slate-warm py-3 rounded-xl font-bold text-sm">恢复当前配置</button>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl shadow p-5 border border-[#E7E0D3]">
+                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+                                <div>
                                     <h3 class="font-bold text-lg">PDF 下载中心</h3>
-                                    <p class="text-xs text-slate-warm mt-1">大批量导出改为队列任务，生成完成后支持再次下载 ZIP，也可以清理历史记录。</p>
+                                    <p class="text-xs text-slate-warm mt-1">大批量导出已迁到 Supabase 后台任务，生成完成后支持再次下载 ZIP，也可以清理历史记录。</p>
                                 </div>
                                 <button @click="clearFinishedPdfExportJobs" :disabled="!pdfExportJobStats.clearable" :class="pdfExportJobStats.clearable ? 'px-4 py-2 rounded-xl border border-[#D8D1C2] font-bold text-slate-warm text-sm' : 'px-4 py-2 rounded-xl border border-gray-200 font-bold text-gray-300 text-sm cursor-not-allowed bg-gray-50'">清理已结束任务</button>
                             </div>
@@ -557,9 +706,11 @@
                                 <p>1. 审批通过后，教师可直接下载公示 PDF，不再跳转第三方网盘。</p>
                                 <p>2. 批量创建账号已迁移到 Supabase Edge Function，前端不再要求输入 Service Role Key。</p>
                                 <p>3. 审批记录现在支持审批人和驳回原因，便于追溯。</p>
-                                <p>4. 批量 PDF 导出支持按年级、学科、关键词、时间区间组合筛选，还可在 ZIP 中按年级 / 学科 / 教师自动分目录。</p>
-                                <p>5. 批量 PDF 导出已升级为下载中心队列，生成完成后支持重复下载与失败重试。</p>
-                                <p>6. 导入历史作业时，系统会自动补全缺省字段并生成可追踪的文件编号。</p>
+                                <p>4. 审批列表本身已支持按年级、学科、教师和时间区间筛选，便于先筛后批量处理。</p>
+                                <p>5. 批量 PDF 导出支持按年级、学科、关键词、时间区间组合筛选，还可在 ZIP 中按年级 / 学科 / 教师自动分目录。</p>
+                                <p>6. 批量 PDF 导出已迁到 Supabase 后台任务，生成完成后支持重复下载与失败重试。</p>
+                                <p>7. PDF 模板可直接配置学校名称、页眉、落款、章位和命名规则，后续换学校或换模板无需再改代码。</p>
+                                <p>8. 导入历史作业时，系统会自动补全缺省字段并生成可追踪的文件编号。</p>
                             </div>
                         </div>
 
@@ -600,13 +751,27 @@
     <!-- PDF 模板 -->
     <div style="position: fixed; left: -9999px; top: 0;">
         <div id="pdf-template" class="bg-white text-black p-16" style="width: 794px; min-height: 1123px;">
-            <div class="text-center mb-12"><h1 class="pdf-title border-b-4 border-black inline-block pb-2 px-4">作业公示单</h1></div>
             <div v-if="tempPdfData" class="flex flex-col gap-10 px-8">
+                <div class="text-center mb-2">
+                    <div class="pdf-header-note mb-3">{{ tempPdfData.pdfConfig.schoolName }}</div>
+                    <h1 class="pdf-title border-b-4 border-black inline-block pb-2 px-4">{{ tempPdfData.pdfConfig.headerTitle }}</h1>
+                    <div v-if="tempPdfData.pdfConfig.headerSubtitle" class="pdf-header-note mt-3">{{ tempPdfData.pdfConfig.headerSubtitle }}</div>
+                </div>
                 <div class="flex justify-between border-b border-black pb-2 items-end"><span class="pdf-label">年级：{{tempPdfData.grade}}年级</span><span class="pdf-label">学科：{{tempPdfData.subject}}</span></div>
                 <div class="flex justify-between border-b border-black pb-2 items-end"><span class="pdf-label">时长：{{displayDuration(tempPdfData.duration)}}</span><span class="pdf-label">日期：{{formatDateTime(tempPdfData.date).split(' ')[0]}}</span></div>
                 <div class="border-2 border-black p-4 min-h-[400px] relative"><div class="absolute -top-3 left-4 bg-white px-2 font-bold">作业内容</div><p class="text-xl leading-loose whitespace-pre-wrap">{{tempPdfData.content}}</p></div>
                 <div class="border-b border-black pb-2 font-bold text-xl">双减要求：符合</div>
-                <div class="flex justify-between mt-4"><span class="pdf-label">审核人：{{tempPdfData.approver_name || '管理员'}}</span><span class="pdf-label">时间：{{formatDateTime(tempPdfData.approval_time).split(' ')[0]}}</span></div>
+                <div class="flex justify-between mt-4 items-end gap-8">
+                    <div class="space-y-3">
+                        <div class="pdf-label">审核：通过</div>
+                        <div class="pdf-label">时间：{{formatDateTime(tempPdfData.approval_time).split(' ')[0]}}</div>
+                    </div>
+                    <div class="pdf-signoff">
+                        <div class="text-right pdf-label">{{ tempPdfData.pdfConfig.signOffText || tempPdfData.pdfConfig.schoolName }}</div>
+                        <div class="text-right pdf-value mt-3">{{ formatDateTime(tempPdfData.approval_time).split(' ')[0] }}</div>
+                        <div v-if="tempPdfData.pdfConfig.sealLabel" class="pdf-stamp" :style="pdfSealStyle(tempPdfData.pdfConfig)">{{ tempPdfData.pdfConfig.sealLabel }}</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -617,6 +782,9 @@
     const SUPABASE_URL = 'https://aqhdogbdqijppvujiawy.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_QDC8L-A-LQ0o-wEr7vVn3Q_fkJyk_Pi';
     const BULK_CREATE_USERS_FUNCTION = 'bulk-create-users';
+    const PDF_EXPORT_FUNCTION = 'pdf-export-jobs';
+    const APP_SETTINGS_TABLE = 'app_settings';
+    const PDF_TEMPLATE_SETTING_KEY = 'pdf_template';
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const STATUS_OPTIONS = ['全部', '待审批', '已通过', '已驳回'];
     const GRADE_OPTIONS = Array.from({ length: 9 }, (_, index) => index + 1);
@@ -630,10 +798,6 @@
         { value: 'grade_subject', label: '按年级 / 学科分文件夹' },
         { value: 'teacher', label: '按教师分文件夹' }
     ];
-    const PDF_EXPORT_DB_NAME = 'homework-approval-download-center';
-    const PDF_EXPORT_DB_VERSION = 1;
-    const PDF_EXPORT_JOB_STORE = 'pdf_export_jobs';
-    const PDF_EXPORT_ARCHIVE_STORE = 'pdf_export_archives';
     const pad = (value) => String(value).padStart(2, '0');
     const parseDateValue = (value) => {
         if (value === null || value === undefined || value === '') return null;
@@ -660,6 +824,52 @@
     };
     const normalizeDateTimeInput = (value, fallback = new Date()) => getLocalDateTimeInputValue(parseDateValue(value) || fallback);
     const buildDefaultApplyForm = () => ({ grade: 1, subject: '语文', duration: 30, date: getLocalDateTimeInputValue(), content: '' });
+    const buildDefaultAdminFilters = () => ({
+        grade: '全部',
+        subject: '全部',
+        teacher: '全部',
+        dateField: 'date',
+        dateFrom: '',
+        dateTo: ''
+    });
+    const buildDefaultPdfExportFilters = () => ({
+        grade: '全部',
+        subject: '全部',
+        keyword: '',
+        dateField: 'date',
+        dateFrom: '',
+        dateTo: '',
+        folderMode: 'flat'
+    });
+    const buildDefaultPdfTemplateConfig = () => ({
+        schoolName: '学校教务处',
+        headerTitle: '作业公示单',
+        headerSubtitle: 'HOMEWORK APPROVAL NOTICE',
+        signOffText: '学校教务处',
+        sealLabel: '教务专用章',
+        sealOffsetX: 0,
+        sealOffsetY: 0,
+        pdfFileNamePattern: '{file_name}',
+        archiveFileNamePattern: '{mode}_{count}份_{timestamp}'
+    });
+    const normalizePdfTemplateConfig = (value = {}) => {
+        const base = {
+            ...buildDefaultPdfTemplateConfig(),
+            ...(value || {})
+        };
+        return {
+            ...base,
+            schoolName: String(base.schoolName || '').trim() || '学校教务处',
+            headerTitle: String(base.headerTitle || '').trim() || '作业公示单',
+            headerSubtitle: String(base.headerSubtitle || '').trim(),
+            signOffText: String(base.signOffText || '').trim() || String(base.schoolName || '').trim() || '学校教务处',
+            sealLabel: String(base.sealLabel || '').trim(),
+            sealOffsetX: Number.isFinite(Number(base.sealOffsetX)) ? Number(base.sealOffsetX) : 0,
+            sealOffsetY: Number.isFinite(Number(base.sealOffsetY)) ? Number(base.sealOffsetY) : 0,
+            pdfFileNamePattern: String(base.pdfFileNamePattern || '').trim() || '{file_name}',
+            archiveFileNamePattern: String(base.archiveFileNamePattern || '').trim() || '{mode}_{count}份_{timestamp}'
+        };
+    };
     const getRecordTime = (item) => parseDateValue(item?.updated_at || item?.created_at || item?.approval_time || item?.date)?.getTime() || 0;
     const sortRecords = (items = []) => [...items].sort((a, b) => getRecordTime(b) - getRecordTime(a));
     const buildStats = (items = []) => ({
@@ -672,18 +882,134 @@
         const stamp = formatDateTime(date).replace(/[-:\s]/g, '').slice(0, 12);
         return `${teacherName}-${grade}年级-${subject}-${stamp || Date.now()}`;
     };
-    const buildDefaultPdfExportFilters = () => ({
-        grade: '全部',
-        subject: '全部',
-        keyword: '',
-        dateField: 'date',
-        dateFrom: '',
-        dateTo: '',
-        folderMode: 'flat'
+    const snapshotAdminFilters = (source = null, overrides = {}) => ({
+        ...buildDefaultAdminFilters(),
+        ...(source || {}),
+        ...(overrides || {})
+    });
+    const snapshotPdfExportFilters = (source = null, overrides = {}) => ({
+        ...buildDefaultPdfExportFilters(),
+        ...(source || {}),
+        ...(overrides || {})
     });
     const sanitizeFileName = (value, fallback = '作业公示单') => {
         const safeName = String(value || fallback).replace(/[\\/:*?"<>|]+/g, '_').trim();
         return safeName || fallback;
+    };
+    const formatDateToken = (value, withTime = true) => {
+        const date = parseDateValue(value);
+        if (!date) return '';
+        return withTime
+            ? `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}`
+            : `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+    };
+    const renderTemplatePattern = (pattern, values = {}, fallback = '作业公示单') => {
+        const template = String(pattern || '').trim() || fallback;
+        const rendered = template.replace(/\{([a-z_]+)\}/gi, (_, key) => String(values?.[key] ?? '').trim());
+        return sanitizeFileName(rendered.replace(/\s+/g, ' ').trim(), fallback);
+    };
+    const buildPatternValues = (app = {}, extra = {}, config = buildDefaultPdfTemplateConfig()) => ({
+        school: config.schoolName || '',
+        teacher: app.teacher_name || '',
+        grade: String(app.grade || '').trim(),
+        subject: app.subject || '',
+        file_name: app.file_name || '',
+        date: formatDateToken(app.date, false),
+        date_time: formatDateToken(app.date, true),
+        approval_date: formatDateToken(app.approval_time, false),
+        approval_time: formatDateToken(app.approval_time, true),
+        mode: extra.mode || '',
+        count: String(extra.count ?? '').trim(),
+        timestamp: extra.timestamp || formatDateToken(new Date(), true)
+    });
+    const buildPdfFileBaseName = (app, config = buildDefaultPdfTemplateConfig()) => {
+        const safeConfig = normalizePdfTemplateConfig(config);
+        return renderTemplatePattern(
+            safeConfig.pdfFileNamePattern,
+            buildPatternValues(app, {}, safeConfig),
+            app?.file_name || '作业公示单'
+        );
+    };
+    const buildPdfArchiveName = (modeLabel, exportCount, useFilters = true, filters = buildDefaultPdfExportFilters(), config = buildDefaultPdfTemplateConfig()) => {
+        const snapshot = snapshotPdfExportFilters(filters);
+        const safeConfig = normalizePdfTemplateConfig(config);
+        const fallbackParts = [modeLabel];
+        if (useFilters) {
+            if (snapshot.grade !== '全部') fallbackParts.push(`${snapshot.grade}年级`);
+            if (snapshot.subject !== '全部') fallbackParts.push(snapshot.subject);
+            if (String(snapshot.keyword || '').trim()) fallbackParts.push('关键词筛选');
+            if (snapshot.dateFrom || snapshot.dateTo) fallbackParts.push(snapshot.dateField === 'approval_time' ? '审批区间' : '布置区间');
+        }
+        fallbackParts.push(`${exportCount}份`);
+        fallbackParts.push(formatDateToken(new Date(), true) || String(Date.now()));
+        return `${renderTemplatePattern(
+            safeConfig.archiveFileNamePattern,
+            {
+                school: safeConfig.schoolName,
+                mode: modeLabel,
+                count: exportCount,
+                grade: snapshot.grade !== '全部' ? snapshot.grade : '',
+                subject: snapshot.subject !== '全部' ? snapshot.subject : '',
+                timestamp: formatDateToken(new Date(), true)
+            },
+            fallbackParts.join('_')
+        )}.zip`;
+    };
+    const buildKeywordTerms = (value) => String(value || '').toLowerCase().split(/[\s,，、]+/).filter(Boolean);
+    const getFilterTime = (item, field) => parseDateValue(field === 'approval_time' ? item?.approval_time : item?.date)?.getTime() || null;
+    const applyApplicationFilters = (items = [], filters = {}, options = {}) => {
+        const snapshot = options.withTeacher ? snapshotAdminFilters(filters) : snapshotPdfExportFilters(filters);
+        const keywordTerms = buildKeywordTerms(snapshot.keyword);
+        const dateField = snapshot.dateField === 'approval_time' ? 'approval_time' : 'date';
+        const dateFrom = parseDateValue(snapshot.dateFrom)?.getTime() || null;
+        const dateTo = parseDateValue(snapshot.dateTo)?.getTime() || null;
+        const searchFields = Array.isArray(options.searchFields) ? options.searchFields : [];
+        return (items || []).filter((item) => {
+            if (snapshot.grade !== '全部' && String(item.grade || '') !== String(snapshot.grade)) return false;
+            if (snapshot.subject !== '全部' && String(item.subject || '') !== String(snapshot.subject)) return false;
+            if (options.withTeacher && snapshot.teacher !== '全部' && String(item.teacher_name || '') !== String(snapshot.teacher)) return false;
+            if (keywordTerms.length) {
+                const searchText = searchFields.map((field) => String(item?.[field] || '').toLowerCase()).join(' ');
+                if (!keywordTerms.every((term) => searchText.includes(term))) return false;
+            }
+            if (dateFrom || dateTo) {
+                const targetTime = getFilterTime(item, dateField);
+                if (!targetTime) return false;
+                if (dateFrom && targetTime < dateFrom) return false;
+                if (dateTo && targetTime > dateTo) return false;
+            }
+            return true;
+        });
+    };
+    const startOfDay = (value = new Date()) => {
+        const date = parseDateValue(value) || new Date();
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    };
+    const startOfWeek = (value = new Date()) => {
+        const date = startOfDay(value);
+        const day = date.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        date.setDate(date.getDate() + diff);
+        return date;
+    };
+    const buildDistribution = (items = [], getKey = (item) => item, orderedKeys = []) => {
+        const countMap = new Map();
+        for (const item of items || []) {
+            const key = String(getKey(item) || '').trim();
+            if (!key) continue;
+            countMap.set(key, (countMap.get(key) || 0) + 1);
+        }
+        const ordered = orderedKeys.length
+            ? orderedKeys
+                .map((key) => ({ key: String(key), count: countMap.get(String(key)) || 0 }))
+                .filter((item) => item.count > 0)
+            : Array.from(countMap.entries()).map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count || String(a.key).localeCompare(String(b.key), 'zh-CN'));
+        const max = Math.max(1, ...ordered.map((item) => item.count));
+        return ordered.map((item) => ({
+            ...item,
+            label: item.key,
+            percent: Math.max(8, Math.round(item.count / max * 100))
+        }));
     };
     const downloadBlobFile = (blob, fileName) => {
         const blobUrl = URL.createObjectURL(blob);
@@ -694,74 +1020,6 @@
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    };
-    let pdfExportDbPromise = null;
-    const requestToPromise = (request) => new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error || new Error('本地导出存储读取失败'));
-    });
-    const waitForTransaction = (transaction) => new Promise((resolve, reject) => {
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error || new Error('本地导出存储写入失败'));
-        transaction.onabort = () => reject(transaction.error || new Error('本地导出存储操作已中止'));
-    });
-    const openPdfExportDb = () => {
-        if (!window.indexedDB) return Promise.reject(new Error('当前浏览器不支持下载中心本地存储'));
-        if (pdfExportDbPromise) return pdfExportDbPromise;
-        pdfExportDbPromise = new Promise((resolve, reject) => {
-            const request = window.indexedDB.open(PDF_EXPORT_DB_NAME, PDF_EXPORT_DB_VERSION);
-            request.onupgradeneeded = () => {
-                const db = request.result;
-                if (!db.objectStoreNames.contains(PDF_EXPORT_JOB_STORE)) {
-                    db.createObjectStore(PDF_EXPORT_JOB_STORE, { keyPath: 'id' });
-                }
-                if (!db.objectStoreNames.contains(PDF_EXPORT_ARCHIVE_STORE)) {
-                    db.createObjectStore(PDF_EXPORT_ARCHIVE_STORE);
-                }
-            };
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error || new Error('无法打开下载中心本地存储'));
-        });
-        return pdfExportDbPromise;
-    };
-    const listStoredPdfExportJobs = async () => {
-        const db = await openPdfExportDb();
-        const transaction = db.transaction(PDF_EXPORT_JOB_STORE, 'readonly');
-        const records = await requestToPromise(transaction.objectStore(PDF_EXPORT_JOB_STORE).getAll());
-        await waitForTransaction(transaction);
-        return Array.isArray(records) ? records : [];
-    };
-    const saveStoredPdfExportJob = async (job) => {
-        const db = await openPdfExportDb();
-        const transaction = db.transaction(PDF_EXPORT_JOB_STORE, 'readwrite');
-        transaction.objectStore(PDF_EXPORT_JOB_STORE).put(job);
-        await waitForTransaction(transaction);
-        return job;
-    };
-    const removeStoredPdfExportJob = async (jobId) => {
-        const db = await openPdfExportDb();
-        const transaction = db.transaction(PDF_EXPORT_JOB_STORE, 'readwrite');
-        transaction.objectStore(PDF_EXPORT_JOB_STORE).delete(jobId);
-        await waitForTransaction(transaction);
-    };
-    const readStoredPdfExportArchive = async (jobId) => {
-        const db = await openPdfExportDb();
-        const transaction = db.transaction(PDF_EXPORT_ARCHIVE_STORE, 'readonly');
-        const blob = await requestToPromise(transaction.objectStore(PDF_EXPORT_ARCHIVE_STORE).get(jobId));
-        await waitForTransaction(transaction);
-        return blob || null;
-    };
-    const saveStoredPdfExportArchive = async (jobId, blob) => {
-        const db = await openPdfExportDb();
-        const transaction = db.transaction(PDF_EXPORT_ARCHIVE_STORE, 'readwrite');
-        transaction.objectStore(PDF_EXPORT_ARCHIVE_STORE).put(blob, jobId);
-        await waitForTransaction(transaction);
-    };
-    const removeStoredPdfExportArchive = async (jobId) => {
-        const db = await openPdfExportDb();
-        const transaction = db.transaction(PDF_EXPORT_ARCHIVE_STORE, 'readwrite');
-        transaction.objectStore(PDF_EXPORT_ARCHIVE_STORE).delete(jobId);
-        await waitForTransaction(transaction);
     };
 
     createApp({
@@ -787,15 +1045,18 @@
             const teacherStatusFilter = ref('全部');
             const adminStatusFilter = ref('全部');
             const adminKeyword = ref('');
+            const adminFilters = ref(buildDefaultAdminFilters());
             const selectedApplicationIds = ref([]);
             const bulkApprovalDateInput = ref(getLocalDateTimeInputValue());
             const bulkRejectReasonInput = ref('');
             const pdfExportFilters = ref(buildDefaultPdfExportFilters());
+            const pdfTemplateConfig = ref(normalizePdfTemplateConfig());
+            const pdfTemplateForm = ref(normalizePdfTemplateConfig());
             const tempPdfData = ref(null);
             const pdfExportJobs = ref([]);
             const auditLogs = ref([]);
             const subjects = ['语文', '数学', '英语', '物理', '化学', '生物', '政治', '历史', '地理'];
-            let isPdfExportQueueRunning = false;
+            let pdfExportJobPollTimer = null;
 
             const setLoading = (state, text = '') => {
                 isLoading.value = state;
@@ -836,7 +1097,20 @@
                 return Number.isFinite(minutes) && minutes > 0 ? `${minutes}分钟` : '--';
             };
             const resetApplyForm = () => { applyForm.value = buildDefaultApplyForm(); };
+            const resetAdminFilters = () => { adminFilters.value = buildDefaultAdminFilters(); };
             const resetPdfExportFilters = () => { pdfExportFilters.value = buildDefaultPdfExportFilters(); };
+            const setAdminRecentDays = (days) => {
+                const end = new Date();
+                const start = new Date();
+                start.setDate(end.getDate() - Math.max(0, days - 1));
+                start.setHours(0, 0, 0, 0);
+                adminFilters.value.dateFrom = getLocalDateTimeInputValue(start);
+                adminFilters.value.dateTo = getLocalDateTimeInputValue(end);
+            };
+            const clearAdminDateRange = () => {
+                adminFilters.value.dateFrom = '';
+                adminFilters.value.dateTo = '';
+            };
             const setPdfExportRecentDays = (days) => {
                 const end = new Date();
                 const start = new Date();
@@ -849,12 +1123,15 @@
                 pdfExportFilters.value.dateFrom = '';
                 pdfExportFilters.value.dateTo = '';
             };
-            const generatePdfExportJobId = () => window.crypto?.randomUUID?.() || `pdf-export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-            const snapshotPdfExportFilters = (source = pdfExportFilters.value, overrides = {}) => ({
-                ...buildDefaultPdfExportFilters(),
-                ...(source || {}),
-                ...(overrides || {})
-            });
+            const resetPdfTemplateForm = () => {
+                pdfTemplateForm.value = normalizePdfTemplateConfig(pdfTemplateConfig.value);
+            };
+            const pdfSealStyle = (config = {}) => {
+                const safeConfig = normalizePdfTemplateConfig(config);
+                return {
+                    transform: `translate(${safeConfig.sealOffsetX}px, ${safeConfig.sealOffsetY}px) rotate(-8deg)`
+                };
+            };
             const buildPdfExportFilterSummary = (filters = pdfExportFilters.value, useFilters = true) => {
                 const summaryParts = [];
                 const snapshot = snapshotPdfExportFilters(filters);
@@ -887,62 +1164,117 @@
                 return right - left;
             });
             const normalizePdfExportJob = (job = {}) => {
-                const filterSnapshot = snapshotPdfExportFilters(job.filterSnapshot, { folderMode: job.folderMode || job.filterSnapshot?.folderMode || 'flat' });
+                const filterSnapshot = snapshotPdfExportFilters(job.filterSnapshot || job.filter_snapshot, { folderMode: job.folderMode || job.folder_mode || job.filterSnapshot?.folderMode || job.filter_snapshot?.folderMode || 'flat' });
                 const items = buildPdfExportJobItems(Array.isArray(job.items) ? job.items : []);
-                const totalCount = Math.max(0, Number(job.totalCount) || items.length);
+                const totalCount = Math.max(0, Number(job.totalCount ?? job.total_count) || items.length);
                 const normalized = {
-                    id: String(job.id || generatePdfExportJobId()),
-                    modeLabel: String(job.modeLabel || '作业公示 PDF'),
+                    id: String(job.id || `pdf-export-${Date.now()}`),
+                    modeLabel: String(job.modeLabel || job.mode_label || '作业公示 PDF'),
                     status: ['queued', 'running', 'completed', 'failed', 'cancelled'].includes(job.status) ? job.status : 'queued',
-                    createdAt: job.createdAt || new Date().toISOString(),
-                    startedAt: job.startedAt || null,
-                    finishedAt: job.finishedAt || null,
-                    updatedAt: job.updatedAt || job.finishedAt || job.startedAt || job.createdAt || new Date().toISOString(),
+                    createdAt: job.createdAt || job.created_at || new Date().toISOString(),
+                    startedAt: job.startedAt || job.started_at || null,
+                    finishedAt: job.finishedAt || job.finished_at || null,
+                    updatedAt: job.updatedAt || job.updated_at || job.finishedAt || job.finished_at || job.startedAt || job.started_at || job.createdAt || job.created_at || new Date().toISOString(),
                     totalCount,
-                    completedCount: Math.max(0, Math.min(totalCount, Number(job.completedCount) || 0)),
-                    archiveName: String(job.archiveName || ''),
+                    completedCount: Math.max(0, Math.min(totalCount, Number(job.completedCount ?? job.completed_count) || 0)),
+                    archiveName: String(job.archiveName || job.archive_name || ''),
                     filterSnapshot,
-                    filterSummary: String(job.filterSummary || buildPdfExportFilterSummary(filterSnapshot, job.useFilters !== false)),
+                    filterSummary: String(job.filterSummary || job.filter_summary || buildPdfExportFilterSummary(filterSnapshot, job.useFilters !== false && job.use_filters !== false)),
                     folderMode: filterSnapshot.folderMode,
                     items,
-                    useFilters: job.useFilters !== false,
-                    progressText: String(job.progressText || ''),
-                    errorMessage: String(job.errorMessage || ''),
-                    autoDownload: job.autoDownload !== false,
-                    cancelRequested: Boolean(job.cancelRequested)
+                    useFilters: job.useFilters !== false && job.use_filters !== false,
+                    progressText: String(job.progressText || job.progress_text || ''),
+                    errorMessage: String(job.errorMessage || job.error_message || ''),
+                    autoDownload: job.autoDownload !== false && job.auto_download !== false,
+                    cancelRequested: Boolean(job.cancelRequested || job.cancel_requested)
                 };
-                normalized.archiveName = normalized.archiveName || buildPdfArchiveName(normalized.modeLabel, normalized.totalCount, normalized.useFilters, normalized.filterSnapshot);
-                if (normalized.status === 'running') {
-                    normalized.status = 'queued';
-                    normalized.startedAt = null;
-                    normalized.finishedAt = null;
-                    normalized.updatedAt = new Date().toISOString();
-                    normalized.completedCount = 0;
-                    normalized.progressText = '页面刷新后任务已重新排队';
-                    normalized.errorMessage = '';
-                    normalized.cancelRequested = false;
-                }
+                normalized.archiveName = normalized.archiveName || buildPdfArchiveName(normalized.modeLabel, normalized.totalCount, normalized.useFilters, normalized.filterSnapshot, pdfTemplateConfig.value);
                 return normalized;
             };
             const setPdfExportJobs = (jobs = []) => {
                 pdfExportJobs.value = sortPdfExportJobs(jobs.map((job) => normalizePdfExportJob(job)));
+                refreshPdfExportJobPolling();
             };
-            const upsertPdfExportJobLocal = (job) => {
-                const normalized = normalizePdfExportJob(job);
-                setPdfExportJobs([...pdfExportJobs.value.filter((item) => item.id !== normalized.id), normalized]);
-                return normalized;
+            const stopPdfExportJobPolling = () => {
+                if (pdfExportJobPollTimer) {
+                    window.clearInterval(pdfExportJobPollTimer);
+                    pdfExportJobPollTimer = null;
+                }
             };
-            const removePdfExportJobLocal = (jobId) => {
-                pdfExportJobs.value = pdfExportJobs.value.filter((item) => item.id !== jobId);
+            const refreshPdfExportJobPolling = () => {
+                stopPdfExportJobPolling();
+                if (userRole.value !== 'admin') return;
+                const hasActiveJobs = pdfExportJobs.value.some((job) => job.status === 'queued' || job.status === 'running');
+                if (!hasActiveJobs) return;
+                pdfExportJobPollTimer = window.setInterval(() => {
+                    void fetchPdfExportJobs(false, true);
+                }, 3000);
             };
-            const persistPdfExportJob = async (job) => {
-                const normalized = upsertPdfExportJobLocal(job);
-                await saveStoredPdfExportJob(normalized);
-                return normalized;
+            const fetchPdfExportJobs = async (showLoadingOverlay = false, silent = false) => {
+                if (userRole.value !== 'admin') return;
+                if (showLoadingOverlay) setLoading(true, '同步 PDF 导出任务...');
+                try {
+                    const { data, error } = await sbClient
+                        .from('pdf_export_jobs')
+                        .select('*')
+                        .order('created_at', { ascending: false })
+                        .limit(30);
+                    if (error) throw error;
+                    setPdfExportJobs(data || []);
+                } catch (error) {
+                    if (!silent) showError('获取 PDF 导出任务失败', error);
+                } finally {
+                    if (showLoadingOverlay) setLoading(false);
+                }
             };
-            const removePersistedPdfExportJob = async (jobId) => {
-                removePdfExportJobLocal(jobId);
-                await removeStoredPdfExportJob(jobId);
+            const invokePdfExportAction = async (action, payload = {}) => {
+                const { data, error } = await sbClient.functions.invoke(PDF_EXPORT_FUNCTION, {
+                    body: { action, ...payload }
+                });
+                if (error) throw error;
+                if (!data?.ok) throw new Error(data?.error || 'PDF 导出任务处理失败');
+                return data;
+            };
+            const fetchPdfTemplateConfig = async (showLoadingOverlay = false) => {
+                if (!currentUser.value) return;
+                if (showLoadingOverlay) setLoading(true, '读取 PDF 配置...');
+                try {
+                    const { data, error } = await sbClient
+                        .from(APP_SETTINGS_TABLE)
+                        .select('setting_value')
+                        .eq('setting_key', PDF_TEMPLATE_SETTING_KEY)
+                        .maybeSingle();
+                    if (error) throw error;
+                    const normalized = normalizePdfTemplateConfig(data?.setting_value || {});
+                    pdfTemplateConfig.value = normalized;
+                    pdfTemplateForm.value = normalizePdfTemplateConfig(normalized);
+                } catch (error) {
+                    pdfTemplateConfig.value = normalizePdfTemplateConfig();
+                    pdfTemplateForm.value = normalizePdfTemplateConfig();
+                    if (userRole.value === 'admin') showError('读取 PDF 配置失败', error);
+                } finally {
+                    if (showLoadingOverlay) setLoading(false);
+                }
+            };
+            const savePdfTemplateConfig = async () => {
+                if (userRole.value !== 'admin') return alert('只有管理员可以保存 PDF 配置');
+                const normalized = normalizePdfTemplateConfig(pdfTemplateForm.value);
+                setLoading(true, '保存 PDF 配置...');
+                try {
+                    const { error } = await sbClient.from(APP_SETTINGS_TABLE).upsert({
+                        setting_key: PDF_TEMPLATE_SETTING_KEY,
+                        setting_value: normalized
+                    }, { onConflict: 'setting_key' });
+                    if (error) throw error;
+                    pdfTemplateConfig.value = normalized;
+                    pdfTemplateForm.value = normalizePdfTemplateConfig(normalized);
+                    await fetchPdfExportJobs(false, true);
+                    alert('PDF 配置已保存。');
+                } catch (error) {
+                    showError('保存 PDF 配置失败', error);
+                } finally {
+                    setLoading(false);
+                }
             };
             const activePdfExportJob = computed(() => pdfExportJobs.value.find((job) => job.status === 'running') || null);
             const pdfExportJobStats = computed(() => ({
@@ -982,21 +1314,6 @@
                 if (job.status === 'queued') return `等待处理，计划生成 ${job.totalCount} 份 PDF。`;
                 return `正在生成 ${job.completedCount}/${job.totalCount} 份 PDF。`;
             };
-            const hydratePdfExportJobs = async () => {
-                try {
-                    const storedJobs = await listStoredPdfExportJobs();
-                    const normalizedJobs = storedJobs.map((job) => normalizePdfExportJob(job));
-                    setPdfExportJobs(normalizedJobs);
-                    for (const job of normalizedJobs) {
-                        await saveStoredPdfExportJob(job);
-                    }
-                } catch (error) {
-                    pdfExportJobs.value = [];
-                    console.warn('Failed to hydrate PDF export jobs.', error);
-                } finally {
-                    void ensurePdfExportQueueProcessing();
-                }
-            };
             const selectedApplicationIdSet = computed(() => new Set(selectedApplicationIds.value));
             const isApplicationSelected = (id) => selectedApplicationIdSet.value.has(id);
             const syncSelectedApplicationIds = (items = applications.value) => {
@@ -1018,40 +1335,64 @@
             const selectFilteredAdminByStatus = (status) => {
                 replaceSelectedApplications(filteredAdminApplications.value.filter((item) => item.status === status).map((item) => item.id));
             };
-            const buildApprovedSearchText = (item) => [
-                item.teacher_name,
-                item.file_name,
-                item.subject,
-                item.content,
-                item.approver_name
-            ].map((value) => String(value || '').toLowerCase()).join(' ');
-            const getPdfFilterTime = (item, field) => parseDateValue(field === 'approval_time' ? item?.approval_time : item?.date)?.getTime() || null;
-
+            const adminTeacherOptions = computed(() => Array.from(new Set(applications.value.map((item) => String(item.teacher_name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'zh-CN')));
             const overviewStats = computed(() => buildStats(applications.value));
+            const adminDashboardStats = computed(() => {
+                const items = applications.value;
+                const todayStart = startOfDay();
+                const tomorrow = new Date(todayStart);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const weekStart = startOfWeek();
+                const nextWeek = new Date(weekStart);
+                nextWeek.setDate(nextWeek.getDate() + 7);
+                const todaySubmissions = items.filter((item) => {
+                    const time = parseDateValue(item.created_at || item.date)?.getTime();
+                    return time !== undefined && time !== null && time >= todayStart.getTime() && time < tomorrow.getTime();
+                }).length;
+                const weeklyReviewed = items.filter((item) => {
+                    const time = parseDateValue(item.approval_time)?.getTime();
+                    return time !== undefined && time !== null && time >= weekStart.getTime() && time < nextWeek.getTime();
+                }).length;
+                const processedCount = items.filter((item) => item.status === '已通过' || item.status === '已驳回').length;
+                const rejectedCount = items.filter((item) => item.status === '已驳回').length;
+                const rejectionRate = processedCount ? Math.round(rejectedCount / processedCount * 1000) / 10 : 0;
+                return {
+                    todaySubmissions,
+                    weeklyReviewed,
+                    processedCount,
+                    rejectedCount,
+                    rejectionRate,
+                    rejectionRateLabel: `${rejectionRate.toFixed(rejectionRate % 1 === 0 ? 0 : 1)}%`
+                };
+            });
+            const adminGradeDistribution = computed(() => buildDistribution(
+                applications.value,
+                (item) => item.grade ? `${item.grade}年级` : '',
+                GRADE_OPTIONS.map((grade) => `${grade}年级`)
+            ));
+            const adminSubjectDistribution = computed(() => buildDistribution(
+                applications.value,
+                (item) => item.subject || '',
+                subjects
+            ));
             const approvedApplications = computed(() => sortRecords(applications.value).filter((item) => item.status === '已通过'));
+            const pdfTemplatePreview = computed(() => {
+                const sample = approvedApplications.value[0] || applications.value[0] || {
+                    teacher_name: '王老师',
+                    grade: 3,
+                    subject: '语文',
+                    date: new Date(),
+                    approval_time: new Date(),
+                    file_name: '作业公示单'
+                };
+                return {
+                    fileName: `${buildPdfFileBaseName(sample, pdfTemplateForm.value)}.pdf`,
+                    archiveName: buildPdfArchiveName('筛选作业公示PDF', filteredApprovedApplications.value.length || 8, true, pdfExportFilters.value, pdfTemplateForm.value)
+                };
+            });
             const filteredApprovedApplications = computed(() => {
-                const filters = pdfExportFilters.value;
-                const gradeFilter = String(filters.grade || '全部');
-                const subjectFilter = String(filters.subject || '全部');
-                const keywordTerms = String(filters.keyword || '').toLowerCase().split(/[\s,，、]+/).filter(Boolean);
-                const dateField = filters.dateField === 'approval_time' ? 'approval_time' : 'date';
-                const dateFrom = parseDateValue(filters.dateFrom)?.getTime() || null;
-                const dateTo = parseDateValue(filters.dateTo)?.getTime() || null;
-
-                return approvedApplications.value.filter((item) => {
-                    if (gradeFilter !== '全部' && String(item.grade || '') !== gradeFilter) return false;
-                    if (subjectFilter !== '全部' && String(item.subject || '') !== subjectFilter) return false;
-                    if (keywordTerms.length) {
-                        const searchText = buildApprovedSearchText(item);
-                        if (!keywordTerms.every((term) => searchText.includes(term))) return false;
-                    }
-                    if (dateFrom || dateTo) {
-                        const targetTime = getPdfFilterTime(item, dateField);
-                        if (!targetTime) return false;
-                        if (dateFrom && targetTime < dateFrom) return false;
-                        if (dateTo && targetTime > dateTo) return false;
-                    }
-                    return true;
+                return applyApplicationFilters(approvedApplications.value, pdfExportFilters.value, {
+                    searchFields: ['teacher_name', 'file_name', 'subject', 'content', 'approver_name']
                 });
             });
             const filteredApprovedSummary = computed(() => {
@@ -1076,14 +1417,31 @@
                 if (teacherStatusFilter.value !== '全部') list = list.filter((item) => item.status === teacherStatusFilter.value);
                 return list;
             });
+            const hasAdminFiltersApplied = computed(() => {
+                const filters = adminFilters.value;
+                return filters.grade !== '全部'
+                    || filters.subject !== '全部'
+                    || filters.teacher !== '全部'
+                    || Boolean(filters.dateFrom)
+                    || Boolean(filters.dateTo)
+                    || Boolean(String(adminKeyword.value || '').trim());
+            });
             const filteredAdminApplications = computed(() => {
                 let list = sortRecords(applications.value);
                 if (adminStatusFilter.value !== '全部') list = list.filter((item) => item.status === adminStatusFilter.value);
-                const keyword = adminKeyword.value.trim().toLowerCase();
-                if (keyword) {
-                    list = list.filter((item) => [item.teacher_name, item.file_name, item.subject, item.content, item.approver_name, item.rejection_reason].map((value) => String(value || '').toLowerCase()).some((value) => value.includes(keyword)));
-                }
-                return list;
+                return applyApplicationFilters(list, { ...adminFilters.value, keyword: adminKeyword.value }, {
+                    withTeacher: true,
+                    searchFields: ['teacher_name', 'file_name', 'subject', 'content', 'approver_name', 'rejection_reason']
+                });
+            });
+            const filteredAdminSummary = computed(() => {
+                const items = filteredAdminApplications.value;
+                return {
+                    total: items.length,
+                    teacherCount: new Set(items.map((item) => item.teacher_name || '未命名教师')).size,
+                    pendingCount: items.filter((item) => item.status === '待审批').length,
+                    reviewedCount: items.filter((item) => item.status === '已通过' || item.status === '已驳回').length
+                };
             });
             const selectedAdminApplications = computed(() => {
                 const idSet = selectedApplicationIdSet.value;
@@ -1123,7 +1481,6 @@
             };
 
             onMounted(async () => {
-                await hydratePdfExportJobs();
                 const { data: { session }, error } = await sbClient.auth.getSession();
                 if (error) return showError('读取登录状态失败', error);
                 if (session?.user) {
@@ -1154,10 +1511,12 @@
                 setLoading(true, '加载系统数据...');
                 try {
                     await fetchCurrentProfile();
+                    await fetchPdfTemplateConfig(false);
                     await fetchApplications(false);
                     if (userRole.value === 'admin') {
                         await fetchUserList(false);
                         await fetchAuditLogs(false);
+                        await fetchPdfExportJobs(false, true);
                     }
                 } finally {
                     setLoading(false);
@@ -1274,10 +1633,12 @@
                 try {
                     const { error } = await sbClient.auth.signOut();
                     if (error) throw error;
+                    stopPdfExportJobPolling();
                     setCurrentUser(null);
                     applications.value = [];
                     userList.value = [];
                     auditLogs.value = [];
+                    pdfExportJobs.value = [];
                     clearSelectedApplications();
                     bulkApprovalDateInput.value = getLocalDateTimeInputValue();
                     bulkRejectReasonInput.value = '';
@@ -1285,6 +1646,8 @@
                     teacherStatusFilter.value = '全部';
                     adminStatusFilter.value = '全部';
                     adminKeyword.value = '';
+                    resetAdminFilters();
+                    resetPdfExportFilters();
                     showApprovalModal.value = false;
                     showRejectModal.value = false;
                     currentApprovingItem.value = null;
@@ -1292,6 +1655,8 @@
                     approvalDateInput.value = '';
                     rejectReasonInput.value = '';
                     resetApplyForm();
+                    pdfTemplateConfig.value = normalizePdfTemplateConfig();
+                    pdfTemplateForm.value = normalizePdfTemplateConfig();
                 } catch (error) {
                     showError('退出失败', error);
                 } finally {
@@ -1495,7 +1860,8 @@
             const preparePdfData = (app) => ({
                 ...app,
                 approval_time: app.approval_time || getLocalDateTimeInputValue(),
-                approver_name: app.approver_name || '管理员'
+                approver_name: app.approver_name || '管理员',
+                pdfConfig: normalizePdfTemplateConfig(pdfTemplateConfig.value)
             });
 
             const createPdfBlob = async (app) => {
@@ -1510,13 +1876,10 @@
             };
 
             const generateAndDownloadPDF = async (app) => {
-                if (pdfExportJobs.value.some((job) => job.status === 'queued' || job.status === 'running')) {
-                    return alert('当前下载中心有 PDF 导出任务，请稍后再下载单个 PDF。');
-                }
                 setLoading(true, '生成 PDF 中...');
                 try {
                     const pdfBlob = await createPdfBlob(app);
-                    downloadBlobFile(pdfBlob, `${sanitizeFileName(app.file_name)}.pdf`);
+                    downloadBlobFile(pdfBlob, `${buildPdfFileBaseName(app, pdfTemplateConfig.value)}.pdf`);
                 } catch (error) {
                     showError('生成 PDF 失败', error);
                 } finally {
@@ -1536,240 +1899,70 @@
                 return true;
             };
 
-            const buildPdfZipEntryPath = (app, folderMode, fileName) => {
-                const folderParts = [];
-                if (folderMode === 'grade') {
-                    folderParts.push(sanitizeFileName(`${app.grade || '未分级'}年级`));
-                } else if (folderMode === 'grade_subject') {
-                    folderParts.push(sanitizeFileName(`${app.grade || '未分级'}年级`));
-                    folderParts.push(sanitizeFileName(app.subject || '未分学科'));
-                } else if (folderMode === 'teacher') {
-                    folderParts.push(sanitizeFileName(app.teacher_name || '未命名教师'));
-                }
-                return [...folderParts, fileName].join('/');
-            };
-
-            const buildPdfArchiveName = (modeLabel, exportCount, useFilters = true, filters = pdfExportFilters.value) => {
-                const snapshot = snapshotPdfExportFilters(filters);
-                const nameParts = [modeLabel];
-                if (useFilters) {
-                    if (snapshot.grade !== '全部') nameParts.push(`${snapshot.grade}年级`);
-                    if (snapshot.subject !== '全部') nameParts.push(snapshot.subject);
-                    if (String(snapshot.keyword || '').trim()) nameParts.push('关键词筛选');
-                    if (snapshot.dateFrom || snapshot.dateTo) nameParts.push(snapshot.dateField === 'approval_time' ? '审批区间' : '布置区间');
-                }
-                nameParts.push(`${exportCount}份`);
-                nameParts.push(formatDateTime(new Date()).replace(/[-:\s]/g, '').slice(0, 12) || Date.now());
-                return `${nameParts.join('_')}.zip`;
-            };
-
-            const runPdfExportJob = async (jobId) => {
-                const sourceJob = pdfExportJobs.value.find((item) => item.id === jobId);
-                if (!sourceJob || sourceJob.status !== 'queued') return;
-
-                let runningJob = await persistPdfExportJob({
-                    ...sourceJob,
-                    status: 'running',
-                    startedAt: new Date().toISOString(),
-                    finishedAt: null,
-                    updatedAt: new Date().toISOString(),
-                    completedCount: 0,
-                    progressText: `准备生成 1/${sourceJob.totalCount} 份 PDF...`,
-                    errorMessage: '',
-                    cancelRequested: false
-                });
-
-                try {
-                    const zip = new window.JSZip();
-                    const usedPaths = new Set();
-
-                    for (let i = 0; i < runningJob.items.length; i++) {
-                        const latestJob = pdfExportJobs.value.find((item) => item.id === jobId) || runningJob;
-                        if (latestJob.cancelRequested) {
-                            throw new Error('__PDF_EXPORT_CANCELLED__');
-                        }
-
-                        const app = latestJob.items[i];
-                        const pdfBlob = await createPdfBlob(app);
-                        const baseName = sanitizeFileName(app.file_name || `作业公示单_${i + 1}`);
-                        let zipPath = buildPdfZipEntryPath(app, latestJob.folderMode, `${baseName}.pdf`);
-                        let suffix = 2;
-                        while (usedPaths.has(zipPath)) {
-                            zipPath = buildPdfZipEntryPath(app, latestJob.folderMode, `${baseName}_${suffix}.pdf`);
-                            suffix += 1;
-                        }
-                        usedPaths.add(zipPath);
-                        zip.file(zipPath, pdfBlob);
-
-                        runningJob = await persistPdfExportJob({
-                            ...latestJob,
-                            status: 'running',
-                            completedCount: i + 1,
-                            updatedAt: new Date().toISOString(),
-                            progressText: i + 1 >= latestJob.totalCount
-                                ? '正在打包 ZIP 文件...'
-                                : `正在生成第 ${i + 2}/${latestJob.totalCount} 份 PDF...`
-                        });
-                        await new Promise((resolve) => setTimeout(resolve, 0));
-                    }
-
-                    const zipBlob = await zip.generateAsync({
-                        type: 'blob',
-                        compression: 'DEFLATE',
-                        compressionOptions: { level: 6 }
-                    });
-                    await saveStoredPdfExportArchive(jobId, zipBlob);
-
-                    const completedJob = await persistPdfExportJob({
-                        ...runningJob,
-                        status: 'completed',
-                        finishedAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        completedCount: runningJob.totalCount,
-                        progressText: `已生成 ${runningJob.totalCount} 份 PDF，可下载 ZIP。`,
-                        errorMessage: '',
-                        cancelRequested: false
-                    });
-
-                    if (completedJob.autoDownload) {
-                        downloadBlobFile(zipBlob, completedJob.archiveName);
-                    }
-                    alert(`${completedJob.modeLabel} 已完成，${completedJob.totalCount} 份 PDF 已生成。`);
-                } catch (error) {
-                    await removeStoredPdfExportArchive(jobId).catch(() => null);
-                    const latestJob = pdfExportJobs.value.find((item) => item.id === jobId) || runningJob;
-                    const isCancelled = error?.message === '__PDF_EXPORT_CANCELLED__';
-                    const finalJob = await persistPdfExportJob({
-                        ...latestJob,
-                        status: isCancelled ? 'cancelled' : 'failed',
-                        finishedAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        progressText: isCancelled
-                            ? `任务已取消，停止于 ${latestJob.completedCount}/${latestJob.totalCount} 份。`
-                            : `生成失败，已完成 ${latestJob.completedCount}/${latestJob.totalCount} 份。`,
-                        errorMessage: isCancelled ? '' : (error?.message || '导出 PDF 归档失败'),
-                        cancelRequested: false
-                    });
-                    if (!isCancelled) {
-                        alert(`${finalJob.modeLabel} 生成失败，请在下载中心重试。`);
-                    }
-                } finally {
-                    tempPdfData.value = null;
-                }
-            };
-
-            const ensurePdfExportQueueProcessing = async () => {
-                if (isPdfExportQueueRunning) return;
-                if (!window.JSZip) return;
-                isPdfExportQueueRunning = true;
-                try {
-                    while (pdfExportJobs.value.some((job) => job.status === 'queued')) {
-                        const nextJob = sortPdfExportJobs(pdfExportJobs.value).find((job) => job.status === 'queued');
-                        if (!nextJob) break;
-                        await runPdfExportJob(nextJob.id);
-                    }
-                } finally {
-                    isPdfExportQueueRunning = false;
-                }
-            };
-
             const queuePdfExportJob = async (exportList, modeLabel, options = {}) => {
                 if (!exportList.length) return alert('当前没有可导出的 PDF 记录');
-                if (!window.JSZip) return alert('PDF 打包组件加载失败，请刷新页面后重试');
                 const filterSnapshot = snapshotPdfExportFilters(options.filterSnapshot || pdfExportFilters.value);
                 if (options.validateFilters !== false && !validatePdfExportFilters(filterSnapshot)) return;
+                setLoading(true, '提交 PDF 后台任务...');
                 try {
-                    const job = await persistPdfExportJob({
-                        id: generatePdfExportJobId(),
+                    const result = await invokePdfExportAction('queue', {
                         modeLabel,
-                        status: 'queued',
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        totalCount: exportList.length,
-                        completedCount: 0,
-                        archiveName: buildPdfArchiveName(modeLabel, exportList.length, options.useFilters !== false, filterSnapshot),
                         filterSnapshot,
                         filterSummary: buildPdfExportFilterSummary(filterSnapshot, options.useFilters !== false),
-                        folderMode: filterSnapshot.folderMode,
                         items: buildPdfExportJobItems(exportList),
-                        useFilters: options.useFilters !== false,
-                        progressText: `等待处理，计划生成 ${exportList.length} 份 PDF。`,
-                        errorMessage: '',
-                        autoDownload: options.autoDownload !== false,
-                        cancelRequested: false
+                        useFilters: options.useFilters !== false
                     });
-
-                    void ensurePdfExportQueueProcessing();
-                    alert(`${job.modeLabel} 已加入下载中心${activePdfExportJob.value ? '队列' : ''}。`);
+                    await fetchPdfExportJobs(false, true);
+                    alert(`${result.job?.mode_label || modeLabel} 已提交后台任务。`);
                 } catch (error) {
                     showError('创建 PDF 导出任务失败', error);
+                } finally {
+                    setLoading(false);
                 }
             };
 
             const downloadPdfExportJobArchive = async (job) => {
+                if (!job?.id) return;
+                setLoading(true, '准备下载 ZIP...');
                 try {
-                    const archiveBlob = await readStoredPdfExportArchive(job.id);
-                    if (!archiveBlob) return alert('没有找到该任务的 ZIP 文件，请重新生成。');
-                    downloadBlobFile(archiveBlob, job.archiveName);
+                    const result = await invokePdfExportAction('signed_url', { jobId: job.id });
+                    const response = await fetch(result.url);
+                    if (!response.ok) throw new Error('下载文件失败，请稍后重试');
+                    const archiveBlob = await response.blob();
+                    downloadBlobFile(archiveBlob, result.fileName || job.archiveName);
                 } catch (error) {
                     showError('下载 ZIP 失败', error);
+                } finally {
+                    setLoading(false);
                 }
             };
 
             const cancelPdfExportJob = async (job) => {
-                if (!job) return;
+                if (!job?.id) return;
                 try {
-                    if (job.status === 'queued') {
-                        await persistPdfExportJob({
-                            ...job,
-                            status: 'cancelled',
-                            updatedAt: new Date().toISOString(),
-                            finishedAt: new Date().toISOString(),
-                            progressText: `任务已取消，停止于 ${job.completedCount}/${job.totalCount} 份。`
-                        });
-                        return;
-                    }
-                    if (job.status === 'running') {
-                        await persistPdfExportJob({
-                            ...job,
-                            updatedAt: new Date().toISOString(),
-                            cancelRequested: true,
-                            progressText: '正在停止导出任务...'
-                        });
-                    }
+                    await invokePdfExportAction('cancel', { jobId: job.id });
+                    await fetchPdfExportJobs(false, true);
                 } catch (error) {
                     showError('停止导出任务失败', error);
                 }
             };
 
             const retryPdfExportJob = async (job) => {
-                if (!job) return;
+                if (!job?.id) return;
                 try {
-                    await removeStoredPdfExportArchive(job.id).catch(() => null);
-                    await persistPdfExportJob({
-                        ...job,
-                        status: 'queued',
-                        createdAt: new Date().toISOString(),
-                        startedAt: null,
-                        finishedAt: null,
-                        updatedAt: new Date().toISOString(),
-                        completedCount: 0,
-                        progressText: `等待处理，计划生成 ${job.totalCount} 份 PDF。`,
-                        errorMessage: '',
-                        cancelRequested: false
-                    });
-                    void ensurePdfExportQueueProcessing();
+                    await invokePdfExportAction('retry', { jobId: job.id });
+                    await fetchPdfExportJobs(false, true);
                 } catch (error) {
                     showError('重新生成 PDF 失败', error);
                 }
             };
 
             const removePdfExportJob = async (job) => {
-                if (!job) return;
+                if (!job?.id) return;
                 if (job.status === 'running') return alert('请先停止当前导出任务，再删除记录。');
                 try {
-                    await removeStoredPdfExportArchive(job.id).catch(() => null);
-                    await removePersistedPdfExportJob(job.id);
+                    await invokePdfExportAction('delete', { jobId: job.id });
+                    await fetchPdfExportJobs(false, true);
                 } catch (error) {
                     showError('删除导出记录失败', error);
                 }
@@ -1779,10 +1972,8 @@
                 const removableJobs = pdfExportJobs.value.filter((job) => job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled');
                 if (!removableJobs.length) return;
                 try {
-                    for (const job of removableJobs) {
-                        await removeStoredPdfExportArchive(job.id).catch(() => null);
-                        await removePersistedPdfExportJob(job.id);
-                    }
+                    await invokePdfExportAction('clear_finished');
+                    await fetchPdfExportJobs(false, true);
                 } catch (error) {
                     showError('清理导出任务失败', error);
                 }
@@ -1932,22 +2123,27 @@
                 currentTab.value = t;
                 if(t === 'active') await fetchApplications();
                 if(t === 'users') await fetchUserList(true);
-                if(t === 'tools') await fetchAuditLogs(true);
+                if(t === 'tools') {
+                    await fetchAuditLogs(true);
+                    await fetchPdfExportJobs(false, true);
+                    await fetchPdfTemplateConfig(false);
+                }
             };
 
             return {
                 currentUser, userRole, authMode, loginForm, signupForm, applyForm,
                 applications, userList, currentTab, isLoading, loadingText, showApprovalModal, showRejectModal, approvalDateInput, rejectReasonInput,
                 selectedApplicationIds, selectedAdminApplications, selectedPendingApplications, selectedApprovedApplications, selectedRejectedApplications, allFilteredAdminApplicationsSelected,
-                bulkApprovalDateInput, bulkRejectReasonInput, auditLogs, tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword,
+                bulkApprovalDateInput, bulkRejectReasonInput, auditLogs, tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword, adminFilters,
                 pdfExportFilters, gradeOptions: GRADE_OPTIONS, pdfDateFieldOptions: PDF_DATE_FIELD_OPTIONS, pdfFolderModeOptions: PDF_FOLDER_MODE_OPTIONS,
-                pdfExportJobs, activePdfExportJob, pdfExportJobStats,
-                overviewStats, approvedApplications, filteredApprovedApplications, filteredApprovedSummary, hasPdfExportFiltersApplied, filteredTeacherApplications, filteredAdminApplications,
+                pdfExportJobs, activePdfExportJob, pdfExportJobStats, pdfTemplateConfig, pdfTemplateForm, pdfTemplatePreview,
+                overviewStats, approvedApplications, filteredApprovedApplications, filteredApprovedSummary, hasPdfExportFiltersApplied, filteredTeacherApplications, filteredAdminApplications, filteredAdminSummary, hasAdminFiltersApplied,
+                adminDashboardStats, adminGradeDistribution, adminSubjectDistribution, adminTeacherOptions,
                 handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,
                 fetchAuditLogs, toggleAdminSelection, isApplicationSelected, toggleSelectAllFilteredAdmin, selectFilteredAdminByStatus, clearSelectedApplications, bulkApproveSelected, bulkRejectSelected, exportSelectedApprovedPDFs, bulkDeleteSelectedRejected,
-                openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, deleteRejectedApplication, generateAndDownloadPDF, exportAllApprovedPDFs, exportFilteredApprovedPDFs, resetPdfExportFilters, setPdfExportRecentDays, clearPdfExportDateRange, copyFileName,
+                openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, deleteRejectedApplication, generateAndDownloadPDF, exportAllApprovedPDFs, exportFilteredApprovedPDFs, resetAdminFilters, setAdminRecentDays, clearAdminDateRange, resetPdfExportFilters, setPdfExportRecentDays, clearPdfExportDateRange, savePdfTemplateConfig, resetPdfTemplateForm, copyFileName,
                 pdfExportJobStatusLabel, pdfExportJobStatusClass, pdfExportJobProgressPercent, pdfExportJobProgressText, downloadPdfExportJobArchive, cancelPdfExportJob, retryPdfExportJob, removePdfExportJob, clearFinishedPdfExportJobs,
-                statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername,
+                statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername, pdfSealStyle,
                 roleLabel, roleBadgeClass, displayDuration, auditActionLabel, auditLogDescription, exportExcel, downloadImportTemplate, handleImportExcel,
                 downloadUserTemplate, handleImportUsers
             };

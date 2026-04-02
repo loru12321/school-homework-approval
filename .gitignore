@@ -2,3 +2,5 @@
 .playwright-cli/
 Thumbs.db
 Desktop.ini
+supabase/.temp/
+supabase-login-body.json
