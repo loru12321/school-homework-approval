@@ -117,9 +117,6 @@ values (
     "headerTitle": "作业公示单",
     "headerSubtitle": "HOMEWORK APPROVAL NOTICE",
     "signOffText": "学校教务处",
-    "sealLabel": "教务专用章",
-    "sealOffsetX": 0,
-    "sealOffsetY": 0,
     "pdfFileNamePattern": "{file_name}",
     "archiveFileNamePattern": "{mode}_{count}份_{timestamp}"
   }'::jsonb

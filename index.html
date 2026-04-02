@@ -115,28 +115,7 @@
         .pdf-label { font-family: "SimSun", serif; font-weight: bold; font-size: 14pt; }
         .pdf-value { font-family: "SimSun", serif; font-size: 14pt; }
         .pdf-header-note { font-family: "SimSun", serif; font-size: 11pt; letter-spacing: 0.35em; }
-        .pdf-signoff { position: relative; min-width: 220px; min-height: 120px; }
-        .pdf-stamp {
-            position: absolute;
-            right: 10px;
-            bottom: 0;
-            width: 94px;
-            height: 94px;
-            border: 3px solid rgba(186, 39, 39, 0.75);
-            border-radius: 50%;
-            color: rgba(186, 39, 39, 0.82);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            line-height: 1.25;
-            font-family: "SimSun", serif;
-            font-size: 11pt;
-            font-weight: bold;
-            padding: 10px;
-            transform-origin: center;
-            background: rgba(255, 255, 255, 0.18);
-        }
+        .pdf-signoff { min-width: 220px; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col font-sans text-ink">
@@ -613,7 +592,7 @@
                             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                                 <div>
                                     <h3 class="font-bold text-lg">PDF 模板配置</h3>
-                                    <p class="text-xs text-slate-warm mt-1">学校名称、页眉、落款、章位和文件命名规则都可以直接保存到系统配置，无需再改页面代码。</p>
+                                    <p class="text-xs text-slate-warm mt-1">学校名称、页眉、落款和文件命名规则都可以直接保存到系统配置，无需再改页面代码。</p>
                                 </div>
                                 <div class="text-xs text-slate-warm break-all">当前 PDF 名称预览：{{ pdfTemplatePreview.fileName }}</div>
                             </div>
@@ -622,11 +601,6 @@
                                 <input v-model.trim="pdfTemplateForm.headerTitle" class="input-chinese p-3 rounded-xl text-sm" placeholder="页眉主标题">
                                 <input v-model.trim="pdfTemplateForm.headerSubtitle" class="input-chinese p-3 rounded-xl text-sm" placeholder="页眉副标题（可选）">
                                 <input v-model.trim="pdfTemplateForm.signOffText" class="input-chinese p-3 rounded-xl text-sm" placeholder="落款，例如：学校教务处">
-                                <input v-model.trim="pdfTemplateForm.sealLabel" class="input-chinese p-3 rounded-xl text-sm" placeholder="章位文字，例如：教务专用章">
-                                <div class="grid grid-cols-2 gap-3">
-                                    <input v-model.number="pdfTemplateForm.sealOffsetX" type="number" class="input-chinese p-3 rounded-xl text-sm" placeholder="章位横向偏移">
-                                    <input v-model.number="pdfTemplateForm.sealOffsetY" type="number" class="input-chinese p-3 rounded-xl text-sm" placeholder="章位纵向偏移">
-                                </div>
                                 <input v-model.trim="pdfTemplateForm.pdfFileNamePattern" class="input-chinese p-3 rounded-xl text-sm md:col-span-2" placeholder="PDF 命名规则">
                                 <input v-model.trim="pdfTemplateForm.archiveFileNamePattern" class="input-chinese p-3 rounded-xl text-sm md:col-span-2" placeholder="ZIP 命名规则">
                             </div>
@@ -709,7 +683,7 @@
                                 <p>4. 审批列表本身已支持按年级、学科、教师和时间区间筛选，便于先筛后批量处理。</p>
                                 <p>5. 批量 PDF 导出支持按年级、学科、关键词、时间区间组合筛选，还可在 ZIP 中按年级 / 学科 / 教师自动分目录。</p>
                                 <p>6. 批量 PDF 导出已迁到 Supabase 后台任务，生成完成后支持重复下载与失败重试。</p>
-                                <p>7. PDF 模板可直接配置学校名称、页眉、落款、章位和命名规则，后续换学校或换模板无需再改代码。</p>
+                                <p>7. PDF 模板可直接配置学校名称、页眉、落款和命名规则，后续换学校或换模板无需再改代码。</p>
                                 <p>8. 导入历史作业时，系统会自动补全缺省字段并生成可追踪的文件编号。</p>
                             </div>
                         </div>
@@ -769,7 +743,6 @@
                     <div class="pdf-signoff">
                         <div class="text-right pdf-label">{{ tempPdfData.pdfConfig.signOffText || tempPdfData.pdfConfig.schoolName }}</div>
                         <div class="text-right pdf-value mt-3">{{ formatDateTime(tempPdfData.approval_time).split(' ')[0] }}</div>
-                        <div v-if="tempPdfData.pdfConfig.sealLabel" class="pdf-stamp" :style="pdfSealStyle(tempPdfData.pdfConfig)">{{ tempPdfData.pdfConfig.sealLabel }}</div>
                     </div>
                 </div>
             </div>
@@ -846,9 +819,6 @@
         headerTitle: '作业公示单',
         headerSubtitle: 'HOMEWORK APPROVAL NOTICE',
         signOffText: '学校教务处',
-        sealLabel: '教务专用章',
-        sealOffsetX: 0,
-        sealOffsetY: 0,
         pdfFileNamePattern: '{file_name}',
         archiveFileNamePattern: '{mode}_{count}份_{timestamp}'
     });
@@ -858,14 +828,10 @@
             ...(value || {})
         };
         return {
-            ...base,
             schoolName: String(base.schoolName || '').trim() || '学校教务处',
             headerTitle: String(base.headerTitle || '').trim() || '作业公示单',
             headerSubtitle: String(base.headerSubtitle || '').trim(),
             signOffText: String(base.signOffText || '').trim() || String(base.schoolName || '').trim() || '学校教务处',
-            sealLabel: String(base.sealLabel || '').trim(),
-            sealOffsetX: Number.isFinite(Number(base.sealOffsetX)) ? Number(base.sealOffsetX) : 0,
-            sealOffsetY: Number.isFinite(Number(base.sealOffsetY)) ? Number(base.sealOffsetY) : 0,
             pdfFileNamePattern: String(base.pdfFileNamePattern || '').trim() || '{file_name}',
             archiveFileNamePattern: String(base.archiveFileNamePattern || '').trim() || '{mode}_{count}份_{timestamp}'
         };
@@ -1125,12 +1091,6 @@
             };
             const resetPdfTemplateForm = () => {
                 pdfTemplateForm.value = normalizePdfTemplateConfig(pdfTemplateConfig.value);
-            };
-            const pdfSealStyle = (config = {}) => {
-                const safeConfig = normalizePdfTemplateConfig(config);
-                return {
-                    transform: `translate(${safeConfig.sealOffsetX}px, ${safeConfig.sealOffsetY}px) rotate(-8deg)`
-                };
             };
             const buildPdfExportFilterSummary = (filters = pdfExportFilters.value, useFilters = true) => {
                 const summaryParts = [];
@@ -2143,7 +2103,7 @@
                 fetchAuditLogs, toggleAdminSelection, isApplicationSelected, toggleSelectAllFilteredAdmin, selectFilteredAdminByStatus, clearSelectedApplications, bulkApproveSelected, bulkRejectSelected, exportSelectedApprovedPDFs, bulkDeleteSelectedRejected,
                 openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, deleteRejectedApplication, generateAndDownloadPDF, exportAllApprovedPDFs, exportFilteredApprovedPDFs, resetAdminFilters, setAdminRecentDays, clearAdminDateRange, resetPdfExportFilters, setPdfExportRecentDays, clearPdfExportDateRange, savePdfTemplateConfig, resetPdfTemplateForm, copyFileName,
                 pdfExportJobStatusLabel, pdfExportJobStatusClass, pdfExportJobProgressPercent, pdfExportJobProgressText, downloadPdfExportJobArchive, cancelPdfExportJob, retryPdfExportJob, removePdfExportJob, clearFinishedPdfExportJobs,
-                statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername, pdfSealStyle,
+                statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername,
                 roleLabel, roleBadgeClass, displayDuration, auditActionLabel, auditLogDescription, exportExcel, downloadImportTemplate, handleImportExcel,
                 downloadUserTemplate, handleImportUsers
             };

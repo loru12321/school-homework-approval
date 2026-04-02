@@ -1,5 +1,5 @@
 ﻿import { createClient } from "https://esm.sh/@supabase/supabase-js@2?target=deno";
-import { PDFDocument, PDFFont, PDFPage, degrees, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, PDFFont, PDFPage, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import fontkit from "https://esm.sh/@pdf-lib/fontkit@1.1.1";
 import JSZip from "https://esm.sh/jszip@3.10.1";
 
@@ -54,9 +54,6 @@ type PdfTemplateConfig = {
   headerTitle: string;
   headerSubtitle: string;
   signOffText: string;
-  sealLabel: string;
-  sealOffsetX: number;
-  sealOffsetY: number;
   pdfFileNamePattern: string;
   archiveFileNamePattern: string;
 };
@@ -129,9 +126,6 @@ const buildDefaultPdfTemplateConfig = (): PdfTemplateConfig => ({
   headerTitle: "Homework Notice",
   headerSubtitle: "HOMEWORK APPROVAL NOTICE",
   signOffText: "School Office",
-  sealLabel: "Academic Seal",
-  sealOffsetX: 0,
-  sealOffsetY: 0,
   pdfFileNamePattern: "{file_name}",
   archiveFileNamePattern: "{mode}_{count}items_{timestamp}",
 });
@@ -144,9 +138,6 @@ const normalizePdfTemplateConfig = (value: unknown): PdfTemplateConfig => {
     headerTitle: toTrimmedString(base.headerTitle) || "Homework Notice",
     headerSubtitle: toTrimmedString(base.headerSubtitle),
     signOffText: toTrimmedString(base.signOffText) || toTrimmedString(base.schoolName) || "School Office",
-    sealLabel: toTrimmedString(base.sealLabel),
-    sealOffsetX: Number.isFinite(Number(base.sealOffsetX)) ? Number(base.sealOffsetX) : 0,
-    sealOffsetY: Number.isFinite(Number(base.sealOffsetY)) ? Number(base.sealOffsetY) : 0,
     pdfFileNamePattern: toTrimmedString(base.pdfFileNamePattern) || "{file_name}",
     archiveFileNamePattern: toTrimmedString(base.archiveFileNamePattern) || "{mode}_{count}items_{timestamp}",
   };
@@ -374,7 +365,6 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
   const page = pdfDoc.addPage([595.28, 841.89]);
   const pageWidth = page.getWidth();
   const black = rgb(0, 0, 0);
-  const red = rgb(0.73, 0.16, 0.16);
 
   const drawCentered = (text: string, y: number, size: number, color = black) => {
     const width = font.widthOfTextAtSize(text, size);
@@ -433,34 +423,6 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
 
   drawRightText(page, font, config.signOffText || config.schoolName, 520, 190, 14, black);
   drawRightText(page, font, formatDateOnly(app.approval_time), 520, 162, 14, black);
-
-  if (config.sealLabel) {
-    const stampCenterX = 458 + config.sealOffsetX;
-    const stampCenterY = 168 + config.sealOffsetY;
-    page.drawEllipse({
-      x: stampCenterX - 46,
-      y: stampCenterY - 46,
-      xScale: 46,
-      yScale: 46,
-      borderColor: red,
-      borderWidth: 2.5,
-      rotate: degrees(-8),
-    });
-    const stampLines = wrapText(font, config.sealLabel, 10, 54);
-    let stampY = stampCenterY + 10;
-    for (const line of stampLines.slice(0, 3)) {
-      const textWidth = font.widthOfTextAtSize(line, 10);
-      page.drawText(line, {
-        x: stampCenterX - textWidth / 2,
-        y: stampY,
-        size: 10,
-        font,
-        color: red,
-        rotate: degrees(-8),
-      });
-      stampY -= 14;
-    }
-  }
 
   return await pdfDoc.save();
 };
