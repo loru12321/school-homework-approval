@@ -115,7 +115,27 @@
         .pdf-label { font-family: "SimSun", serif; font-weight: bold; font-size: 14pt; }
         .pdf-value { font-family: "SimSun", serif; font-size: 14pt; }
         .pdf-header-note { font-family: "SimSun", serif; font-size: 11pt; letter-spacing: 0.35em; }
-        .pdf-signoff { min-width: 220px; }
+        .pdf-signoff {
+            min-width: 250px;
+            position: relative;
+            padding: 12px 0 10px;
+        }
+        .pdf-signoff-text,
+        .pdf-signoff-date {
+            position: relative;
+            z-index: 2;
+        }
+        .pdf-seal {
+            position: absolute;
+            right: 0;
+            top: -40px;
+            width: 178px;
+            opacity: 0.62;
+            transform: rotate(-8deg);
+            z-index: 1;
+            pointer-events: none;
+            user-select: none;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col font-sans text-ink">
@@ -741,8 +761,9 @@
                         <div class="pdf-label">时间：{{formatDateTime(tempPdfData.approval_time).split(' ')[0]}}</div>
                     </div>
                     <div class="pdf-signoff">
-                        <div class="text-right pdf-label">{{ tempPdfData.pdfConfig.signOffText || tempPdfData.pdfConfig.schoolName }}</div>
-                        <div class="text-right pdf-value mt-3">{{ formatDateTime(tempPdfData.approval_time).split(' ')[0] }}</div>
+                        <img :src="pdfSealImagePath" alt="" class="pdf-seal">
+                        <div class="text-right pdf-label pdf-signoff-text">{{ tempPdfData.pdfConfig.signOffText || tempPdfData.pdfConfig.schoolName }}</div>
+                        <div class="text-right pdf-value mt-3 pdf-signoff-date">{{ formatDateTime(tempPdfData.approval_time).split(' ')[0] }}</div>
                     </div>
                 </div>
             </div>
@@ -758,6 +779,7 @@
     const PDF_EXPORT_FUNCTION = 'pdf-export-jobs';
     const APP_SETTINGS_TABLE = 'app_settings';
     const PDF_TEMPLATE_SETTING_KEY = 'pdf_template';
+    const PDF_SEAL_IMAGE_PATH = './supabase/functions/pdf-export-jobs/school-seal.png';
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const STATUS_OPTIONS = ['全部', '待审批', '已通过', '已驳回'];
     const GRADE_OPTIONS = Array.from({ length: 9 }, (_, index) => index + 1);
@@ -986,6 +1008,18 @@
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    };
+    let pdfSealImagePromise = null;
+    const ensurePdfSealLoaded = () => {
+        if (pdfSealImagePromise) return pdfSealImagePromise;
+        pdfSealImagePromise = new Promise((resolve, reject) => {
+            const image = new Image();
+            image.decoding = 'async';
+            image.onload = () => resolve(PDF_SEAL_IMAGE_PATH);
+            image.onerror = () => reject(new Error('公章图片加载失败'));
+            image.src = PDF_SEAL_IMAGE_PATH;
+        });
+        return pdfSealImagePromise;
     };
 
     createApp({
@@ -1441,6 +1475,7 @@
             };
 
             onMounted(async () => {
+                void ensurePdfSealLoaded().catch((error) => console.warn(error?.message || error));
                 const { data: { session }, error } = await sbClient.auth.getSession();
                 if (error) return showError('读取登录状态失败', error);
                 if (session?.user) {
@@ -1825,6 +1860,7 @@
             });
 
             const createPdfBlob = async (app) => {
+                await ensurePdfSealLoaded();
                 tempPdfData.value = preparePdfData(app);
                 await nextTick();
                 await new Promise((resolve) => setTimeout(resolve, 160));
@@ -2096,7 +2132,7 @@
                 selectedApplicationIds, selectedAdminApplications, selectedPendingApplications, selectedApprovedApplications, selectedRejectedApplications, allFilteredAdminApplicationsSelected,
                 bulkApprovalDateInput, bulkRejectReasonInput, auditLogs, tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword, adminFilters,
                 pdfExportFilters, gradeOptions: GRADE_OPTIONS, pdfDateFieldOptions: PDF_DATE_FIELD_OPTIONS, pdfFolderModeOptions: PDF_FOLDER_MODE_OPTIONS,
-                pdfExportJobs, activePdfExportJob, pdfExportJobStats, pdfTemplateConfig, pdfTemplateForm, pdfTemplatePreview,
+                pdfExportJobs, activePdfExportJob, pdfExportJobStats, pdfTemplateConfig, pdfTemplateForm, pdfTemplatePreview, pdfSealImagePath: PDF_SEAL_IMAGE_PATH,
                 overviewStats, approvedApplications, filteredApprovedApplications, filteredApprovedSummary, hasPdfExportFiltersApplied, filteredTeacherApplications, filteredAdminApplications, filteredAdminSummary, hasAdminFiltersApplied,
                 adminDashboardStats, adminGradeDistribution, adminSubjectDistribution, adminTeacherOptions,
                 handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,

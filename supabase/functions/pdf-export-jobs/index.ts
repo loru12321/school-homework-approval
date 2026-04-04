@@ -22,6 +22,7 @@ const fontBytesPromise = fetch(FONT_URL).then(async (response) => {
   }
   return new Uint8Array(await response.arrayBuffer());
 });
+const sealBytesPromise = Deno.readFile(new URL("./school-seal.png", import.meta.url));
 
 type EnvConfig = {
   supabaseUrl: string;
@@ -361,7 +362,9 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   const fontBytes = await fontBytesPromise;
+  const sealBytes = await sealBytesPromise;
   const font = await pdfDoc.embedFont(fontBytes, { subset: true });
+  const sealImage = await pdfDoc.embedPng(sealBytes);
   const page = pdfDoc.addPage([595.28, 841.89]);
   const pageWidth = page.getWidth();
   const black = rgb(0, 0, 0);
@@ -421,6 +424,15 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
   page.drawText("审核：通过", { x: 70, y: 188, size: 14, font, color: black });
   page.drawText(`时间：${formatDateOnly(app.approval_time)}`, { x: 70, y: 160, size: 14, font, color: black });
 
+  const sealWidth = 162;
+  const sealHeight = sealWidth * (sealImage.height / sealImage.width);
+  page.drawImage(sealImage, {
+    x: 332,
+    y: 130,
+    width: sealWidth,
+    height: sealHeight,
+    opacity: 0.64,
+  });
   drawRightText(page, font, config.signOffText || config.schoolName, 520, 190, 14, black);
   drawRightText(page, font, formatDateOnly(app.approval_time), 520, 162, 14, black);
 
