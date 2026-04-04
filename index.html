@@ -777,6 +777,7 @@
     const SUPABASE_KEY = 'sb_publishable_QDC8L-A-LQ0o-wEr7vVn3Q_fkJyk_Pi';
     const BULK_CREATE_USERS_FUNCTION = 'bulk-create-users';
     const PDF_EXPORT_FUNCTION = 'pdf-export-jobs';
+    const DELETE_REJECTED_APPLICATIONS_FUNCTION = 'delete-rejected-applications';
     const APP_SETTINGS_TABLE = 'app_settings';
     const PDF_TEMPLATE_SETTING_KEY = 'pdf_template';
     const PDF_SEAL_IMAGE_PATH = './supabase/functions/pdf-export-jobs/school-seal.png';
@@ -1227,6 +1228,14 @@
                 });
                 if (error) throw error;
                 if (!data?.ok) throw new Error(data?.error || 'PDF 导出任务处理失败');
+                return data;
+            };
+            const invokeDeleteRejectedApplications = async (applicationIds = []) => {
+                const { data, error } = await sbClient.functions.invoke(DELETE_REJECTED_APPLICATIONS_FUNCTION, {
+                    body: { applicationIds }
+                });
+                if (error) throw error;
+                if (!data?.ok) throw new Error(data?.error || '删除驳回记录失败');
                 return data;
             };
             const fetchPdfTemplateConfig = async (showLoadingOverlay = false) => {
@@ -1745,9 +1754,9 @@
                 if (!window.confirm(`确认删除“${recordLabel}”吗？删除后将无法恢复。`)) return;
                 setLoading(true, '删除记录中...');
                 try {
-                    const deleteResult = await sbClient.rpc('admin_delete_rejected_application', { target_application_id: item.id });
-                    if (deleteResult.error) throw deleteResult.error;
-                    if (!deleteResult.data) {
+                    const deleteResult = await invokeDeleteRejectedApplications([item.id]);
+                    const deletedIds = Array.isArray(deleteResult.deletedIds) ? deleteResult.deletedIds : [];
+                    if (!deletedIds.length) {
                         throw new Error('数据库没有返回删除确认，记录未被真正删除。');
                     }
                     const verifyResult = await sbClient.from('applications').select('id, file_name').eq('id', item.id).maybeSingle();
@@ -1763,7 +1772,12 @@
                     }
                     await fetchApplications(false);
                     await fetchAuditLogs(false);
-                    alert('已从系统中删除该条驳回记录。');
+                    if (userRole.value === 'admin') await fetchPdfExportJobs(false, true);
+                    const cleanupSummary = [];
+                    if (Number(deleteResult.cleanedExportJobCount || 0) > 0) cleanupSummary.push(`关联导出任务：${deleteResult.cleanedExportJobCount} 个`);
+                    if (Number(deleteResult.cleanedArchiveCount || 0) > 0) cleanupSummary.push(`关联 ZIP：${deleteResult.cleanedArchiveCount} 个`);
+                    const warningText = String(deleteResult.cleanupWarning || '').trim();
+                    alert(`已从系统中删除该条驳回记录。${cleanupSummary.length ? `\n同步清理：${cleanupSummary.join('，')}` : ''}${warningText ? `\n注意：${warningText}` : ''}`);
                 } catch (error) {
                     showError('删除记录失败', error);
                 } finally {
@@ -1835,16 +1849,25 @@
                 if (!window.confirm(`确认彻底删除这 ${targetIds.length} 条已驳回记录吗？删除后无法恢复。`)) return;
                 setLoading(true, '批量删除中...');
                 try {
-                    const result = await sbClient.rpc('admin_bulk_delete_rejected_applications', {
-                        target_application_ids: targetIds
-                    });
-                    if (result.error) throw result.error;
-                    const deletedIds = Array.isArray(result.data) ? result.data : [];
+                    const result = await invokeDeleteRejectedApplications(targetIds);
+                    const deletedIds = Array.isArray(result.deletedIds) ? result.deletedIds : [];
                     const skippedCount = targetIds.length - deletedIds.length;
+                    if (deletedIds.length) {
+                        const verifyResult = await sbClient.from('applications').select('id').in('id', deletedIds);
+                        if (verifyResult.error) throw verifyResult.error;
+                        if (Array.isArray(verifyResult.data) && verifyResult.data.length) {
+                            throw new Error('仍有部分记录存在于系统中，批量删除没有完全成功。');
+                        }
+                    }
                     clearSelectedApplications();
                     await fetchApplications(false);
                     await fetchAuditLogs(false);
-                    alert(`批量删除完成\n成功：${deletedIds.length} 条${skippedCount > 0 ? `\n跳过：${skippedCount} 条` : ''}`);
+                    await fetchPdfExportJobs(false, true);
+                    const cleanupSummary = [];
+                    if (Number(result.cleanedExportJobCount || 0) > 0) cleanupSummary.push(`关联导出任务：${result.cleanedExportJobCount} 个`);
+                    if (Number(result.cleanedArchiveCount || 0) > 0) cleanupSummary.push(`关联 ZIP：${result.cleanedArchiveCount} 个`);
+                    const warningText = String(result.cleanupWarning || '').trim();
+                    alert(`批量删除完成\n成功：${deletedIds.length} 条${skippedCount > 0 ? `\n跳过：${skippedCount} 条` : ''}${cleanupSummary.length ? `\n同步清理：${cleanupSummary.join('，')}` : ''}${warningText ? `\n注意：${warningText}` : ''}`);
                 } catch (error) {
                     showError('批量删除失败', error);
                 } finally {

@@ -13,10 +13,12 @@ After GitHub Pages is enabled for this repository, the system can be opened at:
 - `index.html`: main web entry for the system
 - `school-homework-approval.html`: compatibility redirect to `index.html`
 - `supabase/functions/bulk-create-users/index.ts`: Supabase Edge Function for bulk account creation
+- `supabase/functions/delete-rejected-applications/index.ts`: Supabase Edge Function for deleting rejected records and cleaning related export artifacts
 - `supabase/functions/pdf-export-jobs/index.ts`: Supabase Edge Function for background PDF export jobs
 - `supabase/migrations/20260328232000_add_review_fields_and_user_indexes.sql`: migration for approval fields and indexes
 - `supabase/migrations/20260328235900_secure_profile_role_sync.sql`: migration that keeps public signup as teacher-only and syncs admin status from secure metadata
 - `supabase/migrations/20260329040000_add_pdf_export_jobs_and_app_settings.sql`: migration for PDF export jobs, private ZIP storage bucket, and PDF template settings
+- `supabase/migrations/20260404020000_cleanup_pdf_export_jobs_on_application_delete.sql`: migration for locating export jobs and ZIP archives that reference deleted applications
 - `scripts/bootstrap-admin.mjs`: script for securely creating the initial admin with the Service Role Key
 
 ## Recent Improvements
@@ -31,6 +33,7 @@ After GitHub Pages is enabled for this repository, the system can be opened at:
 - Expanded the dashboard with today submissions, weekly reviews, grade distribution, subject distribution, and rejection rate
 - Made the PDF template configurable for school name, header, sign-off, stamp position, and naming rules
 - Migrated bulk PDF export into a Supabase Edge Function background job system with backend ZIP generation, retry support, and repeat download support
+- Deleting rejected records now also clears related PDF export jobs and ZIP archives so storage does not accumulate orphaned files
 - Kept the project as a static web app so it can be opened directly by URL after deployment
 
 ## Supabase Deployment
@@ -51,6 +54,7 @@ Deploy the Edge Function:
 
 ```bash
 supabase functions deploy bulk-create-users
+supabase functions deploy delete-rejected-applications
 supabase functions deploy pdf-export-jobs
 ```
 
@@ -61,7 +65,7 @@ $env:SUPABASE_URL="https://your-project.supabase.co"
 $env:SUPABASE_SERVICE_ROLE_KEY="your_service_role_key"
 $env:ADMIN_USERNAME="your_admin_username"
 $env:ADMIN_PASSWORD="your_admin_password"
-$env:ADMIN_NAME="系统管理员"
+$env:ADMIN_NAME="System Administrator"
 node scripts/bootstrap-admin.mjs
 ```
 
