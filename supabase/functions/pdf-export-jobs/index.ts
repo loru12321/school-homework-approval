@@ -377,11 +377,11 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
     page.drawText(text, { x: (pageWidth - width) / 2, y, size, font, color });
   };
 
-  const badgeWidth = 108;
+  const badgeWidth = 96;
   const badgeHeight = badgeWidth * (badgeImage.height / badgeImage.width);
   page.drawImage(badgeImage, {
-    x: 22,
-    y: 678,
+    x: 30,
+    y: 684,
     width: badgeWidth,
     height: badgeHeight,
   });
