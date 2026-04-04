@@ -22,6 +22,7 @@ const fontBytesPromise = fetch(FONT_URL).then(async (response) => {
   }
   return new Uint8Array(await response.arrayBuffer());
 });
+const badgeBytesPromise = Deno.readFile(new URL("./school-badge.png", import.meta.url));
 const sealBytesPromise = Deno.readFile(new URL("./school-seal.png", import.meta.url));
 
 type EnvConfig = {
@@ -362,8 +363,10 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   const fontBytes = await fontBytesPromise;
+  const badgeBytes = await badgeBytesPromise;
   const sealBytes = await sealBytesPromise;
   const font = await pdfDoc.embedFont(fontBytes, { subset: true });
+  const badgeImage = await pdfDoc.embedPng(badgeBytes);
   const sealImage = await pdfDoc.embedPng(sealBytes);
   const page = pdfDoc.addPage([595.28, 841.89]);
   const pageWidth = page.getWidth();
@@ -373,6 +376,15 @@ const createPdfBytes = async (app: ExportItem, config: PdfTemplateConfig) => {
     const width = font.widthOfTextAtSize(text, size);
     page.drawText(text, { x: (pageWidth - width) / 2, y, size, font, color });
   };
+
+  const badgeWidth = 108;
+  const badgeHeight = badgeWidth * (badgeImage.height / badgeImage.width);
+  page.drawImage(badgeImage, {
+    x: 22,
+    y: 678,
+    width: badgeWidth,
+    height: badgeHeight,
+  });
 
   drawCentered(config.schoolName, 780, 14);
   drawCentered(config.headerTitle, 742, 24);

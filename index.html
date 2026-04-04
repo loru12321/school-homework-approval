@@ -115,6 +115,24 @@
         .pdf-label { font-family: "SimSun", serif; font-weight: bold; font-size: 14pt; }
         .pdf-value { font-family: "SimSun", serif; font-size: 14pt; }
         .pdf-header-note { font-family: "SimSun", serif; font-size: 11pt; letter-spacing: 0.35em; }
+        .pdf-header {
+            position: relative;
+            min-height: 150px;
+            padding-top: 6px;
+        }
+        .pdf-header-content {
+            width: 100%;
+        }
+        .pdf-school-badge {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 136px;
+            height: 136px;
+            object-fit: contain;
+            pointer-events: none;
+            user-select: none;
+        }
         .pdf-signoff {
             min-width: 250px;
             position: relative;
@@ -746,10 +764,13 @@
     <div style="position: fixed; left: -9999px; top: 0;">
         <div id="pdf-template" class="bg-white text-black p-16" style="width: 794px; min-height: 1123px;">
             <div v-if="tempPdfData" class="flex flex-col gap-10 px-8">
-                <div class="text-center mb-2">
-                    <div class="pdf-header-note mb-3">{{ tempPdfData.pdfConfig.schoolName }}</div>
-                    <h1 class="pdf-title border-b-4 border-black inline-block pb-2 px-4">{{ tempPdfData.pdfConfig.headerTitle }}</h1>
-                    <div v-if="tempPdfData.pdfConfig.headerSubtitle" class="pdf-header-note mt-3">{{ tempPdfData.pdfConfig.headerSubtitle }}</div>
+                <div class="pdf-header mb-2">
+                    <img :src="pdfBadgeImagePath" alt="" class="pdf-school-badge">
+                    <div class="pdf-header-content text-center">
+                        <div class="pdf-header-note mb-3">{{ tempPdfData.pdfConfig.schoolName }}</div>
+                        <h1 class="pdf-title border-b-4 border-black inline-block pb-2 px-4">{{ tempPdfData.pdfConfig.headerTitle }}</h1>
+                        <div v-if="tempPdfData.pdfConfig.headerSubtitle" class="pdf-header-note mt-3">{{ tempPdfData.pdfConfig.headerSubtitle }}</div>
+                    </div>
                 </div>
                 <div class="flex justify-between border-b border-black pb-2 items-end"><span class="pdf-label">年级：{{tempPdfData.grade}}年级</span><span class="pdf-label">学科：{{tempPdfData.subject}}</span></div>
                 <div class="flex justify-between border-b border-black pb-2 items-end"><span class="pdf-label">时长：{{displayDuration(tempPdfData.duration)}}</span><span class="pdf-label">日期：{{formatDateTime(tempPdfData.date).split(' ')[0]}}</span></div>
@@ -780,6 +801,7 @@
     const DELETE_REJECTED_APPLICATIONS_FUNCTION = 'delete-rejected-applications';
     const APP_SETTINGS_TABLE = 'app_settings';
     const PDF_TEMPLATE_SETTING_KEY = 'pdf_template';
+    const PDF_BADGE_IMAGE_PATH = './supabase/functions/pdf-export-jobs/school-badge.png';
     const PDF_SEAL_IMAGE_PATH = './supabase/functions/pdf-export-jobs/school-seal.png';
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const STATUS_OPTIONS = ['全部', '待审批', '已通过', '已驳回'];
@@ -1010,16 +1032,23 @@
         link.remove();
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     };
+    const ensureImageLoaded = (src, errorMessage) => new Promise((resolve, reject) => {
+        const image = new Image();
+        image.decoding = 'async';
+        image.onload = () => resolve(src);
+        image.onerror = () => reject(new Error(errorMessage));
+        image.src = src;
+    });
+    let pdfBadgeImagePromise = null;
     let pdfSealImagePromise = null;
+    const ensurePdfBadgeLoaded = () => {
+        if (pdfBadgeImagePromise) return pdfBadgeImagePromise;
+        pdfBadgeImagePromise = ensureImageLoaded(PDF_BADGE_IMAGE_PATH, '校徽图片加载失败');
+        return pdfBadgeImagePromise;
+    };
     const ensurePdfSealLoaded = () => {
         if (pdfSealImagePromise) return pdfSealImagePromise;
-        pdfSealImagePromise = new Promise((resolve, reject) => {
-            const image = new Image();
-            image.decoding = 'async';
-            image.onload = () => resolve(PDF_SEAL_IMAGE_PATH);
-            image.onerror = () => reject(new Error('公章图片加载失败'));
-            image.src = PDF_SEAL_IMAGE_PATH;
-        });
+        pdfSealImagePromise = ensureImageLoaded(PDF_SEAL_IMAGE_PATH, '公章图片加载失败');
         return pdfSealImagePromise;
     };
 
@@ -1484,6 +1513,7 @@
             };
 
             onMounted(async () => {
+                void ensurePdfBadgeLoaded().catch((error) => console.warn(error?.message || error));
                 void ensurePdfSealLoaded().catch((error) => console.warn(error?.message || error));
                 const { data: { session }, error } = await sbClient.auth.getSession();
                 if (error) return showError('读取登录状态失败', error);
@@ -1883,7 +1913,7 @@
             });
 
             const createPdfBlob = async (app) => {
-                await ensurePdfSealLoaded();
+                await Promise.all([ensurePdfBadgeLoaded(), ensurePdfSealLoaded()]);
                 tempPdfData.value = preparePdfData(app);
                 await nextTick();
                 await new Promise((resolve) => setTimeout(resolve, 160));
@@ -2155,7 +2185,7 @@
                 selectedApplicationIds, selectedAdminApplications, selectedPendingApplications, selectedApprovedApplications, selectedRejectedApplications, allFilteredAdminApplicationsSelected,
                 bulkApprovalDateInput, bulkRejectReasonInput, auditLogs, tempPdfData, subjects, statusOptions: STATUS_OPTIONS, teacherStatusFilter, adminStatusFilter, adminKeyword, adminFilters,
                 pdfExportFilters, gradeOptions: GRADE_OPTIONS, pdfDateFieldOptions: PDF_DATE_FIELD_OPTIONS, pdfFolderModeOptions: PDF_FOLDER_MODE_OPTIONS,
-                pdfExportJobs, activePdfExportJob, pdfExportJobStats, pdfTemplateConfig, pdfTemplateForm, pdfTemplatePreview, pdfSealImagePath: PDF_SEAL_IMAGE_PATH,
+                pdfExportJobs, activePdfExportJob, pdfExportJobStats, pdfTemplateConfig, pdfTemplateForm, pdfTemplatePreview, pdfBadgeImagePath: PDF_BADGE_IMAGE_PATH, pdfSealImagePath: PDF_SEAL_IMAGE_PATH,
                 overviewStats, approvedApplications, filteredApprovedApplications, filteredApprovedSummary, hasPdfExportFiltersApplied, filteredTeacherApplications, filteredAdminApplications, filteredAdminSummary, hasAdminFiltersApplied,
                 adminDashboardStats, adminGradeDistribution, adminSubjectDistribution, adminTeacherOptions,
                 handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,
