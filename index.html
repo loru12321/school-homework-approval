@@ -653,9 +653,12 @@
                             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                                 <div>
                                     <h3 class="font-bold text-lg">PDF 下载中心</h3>
-                                    <p class="text-xs text-slate-warm mt-1">大批量导出已迁到 Supabase 后台任务，生成完成后支持再次下载 ZIP，也可以清理历史记录。</p>
+                                    <p class="text-xs text-slate-warm mt-1">大批量导出已迁到 Supabase 后台任务，生成完成后支持再次下载 ZIP，也可以清理历史记录。系统还会每天自动清理超过 2 年的云端数据。</p>
                                 </div>
-                                <button @click="clearFinishedPdfExportJobs" :disabled="!pdfExportJobStats.clearable" :class="pdfExportJobStats.clearable ? 'px-4 py-2 rounded-xl border border-[#D8D1C2] font-bold text-slate-warm text-sm' : 'px-4 py-2 rounded-xl border border-gray-200 font-bold text-gray-300 text-sm cursor-not-allowed bg-gray-50'">清理已结束任务</button>
+                                <div class="flex flex-wrap gap-2 justify-end">
+                                    <button @click="runExpiredCloudDataCleanup" class="px-4 py-2 rounded-xl border border-[#D8D1C2] font-bold text-slate-warm text-sm">立即执行过期清理</button>
+                                    <button @click="clearFinishedPdfExportJobs" :disabled="!pdfExportJobStats.clearable" :class="pdfExportJobStats.clearable ? 'px-4 py-2 rounded-xl border border-[#D8D1C2] font-bold text-slate-warm text-sm' : 'px-4 py-2 rounded-xl border border-gray-200 font-bold text-gray-300 text-sm cursor-not-allowed bg-gray-50'">清理已结束任务</button>
+                                </div>
                             </div>
                             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-4">
                                 <div class="summary-card">
@@ -799,6 +802,7 @@
     const BULK_CREATE_USERS_FUNCTION = 'bulk-create-users';
     const PDF_EXPORT_FUNCTION = 'pdf-export-jobs';
     const DELETE_REJECTED_APPLICATIONS_FUNCTION = 'delete-rejected-applications';
+    const CLEANUP_EXPIRED_CLOUD_DATA_FUNCTION = 'cleanup-expired-cloud-data';
     const APP_SETTINGS_TABLE = 'app_settings';
     const PDF_TEMPLATE_SETTING_KEY = 'pdf_template';
     const PDF_BADGE_IMAGE_PATH = './supabase/functions/pdf-export-jobs/school-badge.png';
@@ -1265,6 +1269,14 @@
                 });
                 if (error) throw error;
                 if (!data?.ok) throw new Error(data?.error || '删除驳回记录失败');
+                return data;
+            };
+            const invokeExpiredCloudDataCleanup = async (payload = {}) => {
+                const { data, error } = await sbClient.functions.invoke(CLEANUP_EXPIRED_CLOUD_DATA_FUNCTION, {
+                    body: payload
+                });
+                if (error) throw error;
+                if (!data?.ok) throw new Error(data?.error || '过期云端数据清理失败');
                 return data;
             };
             const fetchPdfTemplateConfig = async (showLoadingOverlay = false) => {
@@ -2027,6 +2039,47 @@
                     showError('清理导出任务失败', error);
                 }
             };
+            const runExpiredCloudDataCleanup = async () => {
+                if (userRole.value !== 'admin') return alert('只有管理员可以执行过期清理');
+                setLoading(true, '检查过期云端数据...');
+                try {
+                    const preview = await invokeExpiredCloudDataCleanup({ dryRun: true, source: 'admin-preview' });
+                    const expiredApplications = Number(preview.expiredApplications) || 0;
+                    const expiredPdfJobs = Number(preview.expiredPdfJobs) || 0;
+                    const expiredOperationLogs = Number(preview.expiredOperationLogs) || 0;
+                    const previewTotal = expiredApplications + expiredPdfJobs + expiredOperationLogs;
+                    if (!previewTotal) {
+                        alert(`当前没有超过 ${preview.retentionYears || 2} 年的云端数据需要清理。`);
+                        return;
+                    }
+
+                    const previewLines = [
+                        `作业记录：${expiredApplications} 条`,
+                        `PDF 导出任务：${expiredPdfJobs} 条`,
+                        `操作日志：${expiredOperationLogs} 条`
+                    ];
+                    if (!window.confirm(`检测到超过 ${preview.retentionYears || 2} 年的云端数据：\n${previewLines.join('\n')}\n\n确认立即执行清理吗？`)) {
+                        return;
+                    }
+
+                    loadingText.value = '执行过期云端清理...';
+                    const result = await invokeExpiredCloudDataCleanup({ source: 'admin-manual' });
+                    await fetchApplications(false);
+                    await fetchAuditLogs(false);
+                    await fetchPdfExportJobs(false, true);
+
+                    const deletedApplications = Number(result.deletedApplications) || 0;
+                    const deletedPdfJobs = (Number(result.removedRelatedPdfJobs) || 0) + (Number(result.deletedPdfJobs) || 0);
+                    const deletedArchives = (Number(result.removedRelatedArchives) || 0) + (Number(result.removedPdfArchives) || 0);
+                    const deletedOperationLogs = Number(result.deletedOperationLogs) || 0;
+                    const warningText = Array.isArray(result.warnings) && result.warnings.length ? `\n注意：${result.warnings.join('；')}` : '';
+                    alert(`过期云端数据清理完成\n作业记录：${deletedApplications} 条\nPDF 导出任务：${deletedPdfJobs} 条\nZIP 归档：${deletedArchives} 个\n操作日志：${deletedOperationLogs} 条${warningText}`);
+                } catch (error) {
+                    showError('执行过期云端清理失败', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
 
             const exportAllApprovedPDFs = async () => {
                 await queuePdfExportJob(approvedApplications.value, '全部已通过作业公示PDF', { validateFilters: false, useFilters: false });
@@ -2191,7 +2244,7 @@
                 handleLogin, handleSignup, logout, switchTab, submitApply, resetApplyForm, fetchApplications, fetchUserList,
                 fetchAuditLogs, toggleAdminSelection, isApplicationSelected, toggleSelectAllFilteredAdmin, selectFilteredAdminByStatus, clearSelectedApplications, bulkApproveSelected, bulkRejectSelected, exportSelectedApprovedPDFs, bulkDeleteSelectedRejected,
                 openApprovalModal, openRejectModal, confirmApproval, confirmReject, updateStatus, deleteRejectedApplication, generateAndDownloadPDF, exportAllApprovedPDFs, exportFilteredApprovedPDFs, resetAdminFilters, setAdminRecentDays, clearAdminDateRange, resetPdfExportFilters, setPdfExportRecentDays, clearPdfExportDateRange, savePdfTemplateConfig, resetPdfTemplateForm, copyFileName,
-                pdfExportJobStatusLabel, pdfExportJobStatusClass, pdfExportJobProgressPercent, pdfExportJobProgressText, downloadPdfExportJobArchive, cancelPdfExportJob, retryPdfExportJob, removePdfExportJob, clearFinishedPdfExportJobs,
+                pdfExportJobStatusLabel, pdfExportJobStatusClass, pdfExportJobProgressPercent, pdfExportJobProgressText, downloadPdfExportJobArchive, cancelPdfExportJob, retryPdfExportJob, removePdfExportJob, clearFinishedPdfExportJobs, runExpiredCloudDataCleanup,
                 statusClass, adminCardBorderClass, formatDateTime, displayUserName, displayProfileName, displayProfileUsername,
                 roleLabel, roleBadgeClass, displayDuration, auditActionLabel, auditLogDescription, exportExcel, downloadImportTemplate, handleImportExcel,
                 downloadUserTemplate, handleImportUsers

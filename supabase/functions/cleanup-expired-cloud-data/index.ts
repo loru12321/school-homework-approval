@@ -10,6 +10,7 @@ const PDF_EXPORT_BUCKET = "pdf-export-archives";
 const RETENTION_YEARS = 2;
 const APPLICATION_BATCH_SIZE = 200;
 const PDF_JOB_BATCH_SIZE = 100;
+const OPERATION_LOG_BATCH_SIZE = 500;
 const ACTIVE_JOB_STATUSES = new Set(["queued", "running"]);
 const FINISHED_JOB_STATUSES = ["completed", "failed", "cancelled"];
 const ACTIVE_JOB_STOP_TIMEOUT_MS = 20000;
@@ -32,6 +33,12 @@ type PdfExportJobCleanupRow = {
   id?: string;
   archive_path?: string | null;
   status?: string;
+};
+
+type RequestAuthContext = {
+  mode: "cron" | "admin";
+  userId: string | null;
+  requesterName: string;
 };
 
 const json = (status: number, body: Record<string, unknown>) =>
@@ -68,6 +75,65 @@ const createServiceClient = (env: EnvConfig) =>
       autoRefreshToken: false,
     },
   });
+
+const createUserClient = (env: EnvConfig, authHeader: string) =>
+  createClient(env.supabaseUrl, env.anonKey, {
+    global: { headers: { Authorization: authHeader } },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+
+const resolveRequestAuth = async (
+  req: Request,
+  env: EnvConfig,
+  serviceClient: ReturnType<typeof createClient>,
+): Promise<RequestAuthContext> => {
+  const providedSecret = req.headers.get("x-retention-cron-secret") || "";
+  if (providedSecret && providedSecret === env.retentionCronSecret) {
+    return {
+      mode: "cron",
+      userId: null,
+      requesterName: "Retention Cron",
+    };
+  }
+
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    throw new Error("Missing authorization header.");
+  }
+
+  const userClient = createUserClient(env, authHeader);
+  const {
+    data: { user },
+    error: authError,
+  } = await userClient.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error(authError?.message || "Login session expired.");
+  }
+
+  const { data: profile, error: profileError } = await serviceClient
+    .from("profiles")
+    .select("role, full_name, username")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    throw new Error(profileError.message || "Failed to load admin profile.");
+  }
+
+  if (profile?.role !== "admin") {
+    throw new Error("Only admins can run retention cleanup.");
+  }
+
+  return {
+    mode: "admin",
+    userId: user.id,
+    requesterName: toTrimmedString(profile?.full_name) || toTrimmedString(profile?.username) || "Admin",
+  };
+};
 
 const createCutoffIso = (nowValue?: unknown) => {
   const now = nowValue ? new Date(String(nowValue)) : new Date();
@@ -515,6 +581,77 @@ const cleanupExpiredPdfJobs = async (
   };
 };
 
+const loadExpiredOperationLogCount = async (
+  serviceClient: ReturnType<typeof createClient>,
+  cutoffIso: string,
+) => {
+  const { count, error } = await serviceClient
+    .from("operation_logs")
+    .select("id", { head: true, count: "exact" })
+    .lt("created_at", cutoffIso);
+
+  if (error) {
+    throw new Error(error.message || "Failed to count expired operation logs.");
+  }
+
+  return Number(count || 0);
+};
+
+const loadExpiredOperationLogBatch = async (
+  serviceClient: ReturnType<typeof createClient>,
+  cutoffIso: string,
+  limit: number,
+) => {
+  const { data, error } = await serviceClient
+    .from("operation_logs")
+    .select("id")
+    .lt("created_at", cutoffIso)
+    .order("id", { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(error.message || "Failed to load expired operation logs.");
+  }
+
+  return Array.isArray(data)
+    ? data.map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0)
+    : [];
+};
+
+const cleanupExpiredOperationLogs = async (
+  serviceClient: ReturnType<typeof createClient>,
+  cutoffIso: string,
+  dryRun: boolean,
+) => {
+  const expiredOperationLogCount = await loadExpiredOperationLogCount(serviceClient, cutoffIso);
+  if (dryRun || !expiredOperationLogCount) {
+    return {
+      expiredOperationLogCount,
+      deletedOperationLogCount: 0,
+    };
+  }
+
+  let deletedOperationLogCount = 0;
+  while (true) {
+    const batchIds = await loadExpiredOperationLogBatch(serviceClient, cutoffIso, OPERATION_LOG_BATCH_SIZE);
+    if (!batchIds.length) {
+      break;
+    }
+
+    const deleteResult = await serviceClient.from("operation_logs").delete().in("id", batchIds);
+    if (deleteResult.error) {
+      throw new Error(deleteResult.error.message || "Failed to delete expired operation logs.");
+    }
+
+    deletedOperationLogCount += batchIds.length;
+  }
+
+  return {
+    expiredOperationLogCount,
+    deletedOperationLogCount,
+  };
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -522,18 +659,24 @@ Deno.serve(async (req: Request) => {
 
   try {
     const env = getEnv();
-    const providedSecret = req.headers.get("x-retention-cron-secret") || "";
-    if (providedSecret !== env.retentionCronSecret) {
-      return json(401, { ok: false, error: "Unauthorized cleanup request." });
+    const serviceClient = createServiceClient(env);
+    let authContext: RequestAuthContext;
+
+    try {
+      authContext = await resolveRequestAuth(req, env, serviceClient);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unauthorized cleanup request.";
+      const status = message === "Only admins can run retention cleanup." ? 403 : 401;
+      return json(status, { ok: false, error: message });
     }
 
     const body = await req.json().catch(() => ({}));
     const dryRun = body?.dryRun === true;
     const cutoffIso = createCutoffIso(body?.now);
-    const serviceClient = createServiceClient(env);
 
     const applicationCleanup = await cleanupExpiredApplications(serviceClient, cutoffIso, dryRun);
     const pdfJobCleanup = await cleanupExpiredPdfJobs(serviceClient, cutoffIso, dryRun);
+    const operationLogCleanup = await cleanupExpiredOperationLogs(serviceClient, cutoffIso, dryRun);
     const warnings = Array.from(new Set([
       ...applicationCleanup.warnings,
       ...pdfJobCleanup.warnings,
@@ -543,6 +686,8 @@ Deno.serve(async (req: Request) => {
       ok: true,
       dryRun,
       source: toTrimmedString(body?.source) || "manual",
+      authorizedAs: authContext.mode,
+      requestedBy: authContext.requesterName,
       retentionYears: RETENTION_YEARS,
       cutoffIso,
       expiredApplications: applicationCleanup.expiredApplicationCount,
@@ -552,6 +697,8 @@ Deno.serve(async (req: Request) => {
       expiredPdfJobs: pdfJobCleanup.expiredPdfJobCount,
       deletedPdfJobs: pdfJobCleanup.deletedPdfJobCount,
       removedPdfArchives: pdfJobCleanup.removedPdfArchiveCount,
+      expiredOperationLogs: operationLogCleanup.expiredOperationLogCount,
+      deletedOperationLogs: operationLogCleanup.deletedOperationLogCount,
       warnings,
     });
   } catch (error) {
