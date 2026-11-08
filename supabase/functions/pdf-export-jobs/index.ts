@@ -523,7 +523,7 @@ const processPdfExportJob = async (env: EnvConfig, jobId: string) => {
       compressionOptions: { level: 6 },
     });
 
-    const archivePath = `jobs/${jobId}/${sanitizeFileName(archiveName, "pdf-export.zip")}`;
+    const archivePath = `jobs/${jobId}/export.zip`;
     const uploadResult = await adminClient.storage.from(PDF_EXPORT_BUCKET).upload(archivePath, zipBytes, {
       upsert: true,
       contentType: "application/zip",
