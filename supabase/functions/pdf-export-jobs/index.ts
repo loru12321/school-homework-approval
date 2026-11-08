@@ -22,8 +22,14 @@ const fontBytesPromise = fetch(FONT_URL).then(async (response) => {
   }
   return new Uint8Array(await response.arrayBuffer());
 });
-const badgeBytesPromise = Deno.readFile(new URL("./school-badge.png", import.meta.url));
-const sealBytesPromise = Deno.readFile(new URL("./school-seal.png", import.meta.url));
+const assetUrl = "https://loru12321.github.io/school-homework-approval/supabase/functions/pdf-export-jobs/";
+const fetchImage = async (name: string) => {
+  const response = await fetch(assetUrl + name);
+  if (!response.ok) throw new Error(`PDF image fetch failed: ${name} (${response.status})`);
+  return new Uint8Array(await response.arrayBuffer());
+};
+const badgeBytesPromise = fetchImage("school-badge.png");
+const sealBytesPromise = fetchImage("school-seal.png");
 
 type EnvConfig = {
   supabaseUrl: string;

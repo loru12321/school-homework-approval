@@ -38,6 +38,22 @@ After GitHub Pages is enabled for this repository, the system can be opened at:
 
 ## Supabase Deployment
 
+The live site uses Supabase project `bbsizrillgmkqwpkxxlj` in `loru12321's Org`.
+The November 2026 recovery restored 19 users, 116 applications, 63 operation logs,
+and the PDF template setting from the local JSON backup. The backup did not
+contain Auth password hashes, so each recovered user has a distinct temporary
+password. The private password CSV is kept outside this repository.
+Teacher self-registration uses virtual `@school.com` addresses. The recovery
+migration confirms only those addresses on insert so signup works without a
+receivable mailbox; other email domains still follow the project's normal
+confirmation settings.
+
+To prepare a new recovery from the same JSON format, install `bcrypt==4.3.0`
+and run `python scripts/prepare_homework_recovery.py BACKUP_JSON OUTPUT_DIR`.
+The generated SQL and password CSV contain private data and must remain outside
+the repository. Apply the baseline and later migrations before the generated
+Auth and application data batches.
+
 Run the migration:
 
 ```bash

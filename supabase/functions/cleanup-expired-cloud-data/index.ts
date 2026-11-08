@@ -20,7 +20,6 @@ type EnvConfig = {
   supabaseUrl: string;
   anonKey: string;
   serviceRoleKey: string;
-  retentionCronSecret: string;
 };
 
 type CleanupCandidate = {
@@ -57,15 +56,13 @@ const getEnv = (): EnvConfig => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
   const serviceRoleKey = Deno.env.get("PROJECT_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const retentionCronSecret = Deno.env.get("RETENTION_CRON_SECRET");
-
-  if (!supabaseUrl || !anonKey || !serviceRoleKey || !retentionCronSecret) {
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     throw new Error(
-      "Missing Supabase env vars: SUPABASE_URL, SUPABASE_ANON_KEY, PROJECT_SERVICE_ROLE_KEY, RETENTION_CRON_SECRET.",
+      "Missing Supabase env vars: SUPABASE_URL, SUPABASE_ANON_KEY, PROJECT_SERVICE_ROLE_KEY.",
     );
   }
 
-  return { supabaseUrl, anonKey, serviceRoleKey, retentionCronSecret };
+  return { supabaseUrl, anonKey, serviceRoleKey };
 };
 
 const createServiceClient = (env: EnvConfig) =>
@@ -91,12 +88,17 @@ const resolveRequestAuth = async (
   serviceClient: ReturnType<typeof createClient>,
 ): Promise<RequestAuthContext> => {
   const providedSecret = req.headers.get("x-retention-cron-secret") || "";
-  if (providedSecret && providedSecret === env.retentionCronSecret) {
-    return {
-      mode: "cron",
-      userId: null,
-      requesterName: "Retention Cron",
-    };
+  if (providedSecret) {
+    const { data: allowed, error } = await serviceClient.rpc("verify_retention_cron_secret", {
+      provided_secret: providedSecret,
+    });
+    if (!error && allowed === true) {
+      return {
+        mode: "cron",
+        userId: null,
+        requesterName: "Retention Cron",
+      };
+    }
   }
 
   const authHeader = req.headers.get("Authorization");

@@ -797,8 +797,8 @@
 
 <script>
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
-    const SUPABASE_URL = 'https://aqhdogbdqijppvujiawy.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_QDC8L-A-LQ0o-wEr7vVn3Q_fkJyk_Pi';
+    const SUPABASE_URL = 'https://bbsizrillgmkqwpkxxlj.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_kLqJ-iREOI-bBhMzMebBUw_5rQVEikR';
     const BULK_CREATE_USERS_FUNCTION = 'bulk-create-users';
     const PDF_EXPORT_FUNCTION = 'pdf-export-jobs';
     const DELETE_REJECTED_APPLICATIONS_FUNCTION = 'delete-rejected-applications';
@@ -1659,14 +1659,15 @@
                     signupForm.value = { username: '', password: '', name: '' };
                     loginForm.value.account = username;
                     loginForm.value.password = '';
-                    if (data?.session?.user) {
-                        setCurrentUser(data.session.user);
-                        await initData();
-                        alert('注册成功，已自动登录。');
-                    } else {
-                        authMode.value = 'login';
-                        alert('注册成功，请使用新账号登录。');
+                    let signedInUser = data?.session?.user;
+                    if (!signedInUser) {
+                        const login = await sbClient.auth.signInWithPassword({ email: `${username}@school.com`, password });
+                        if (login.error) throw login.error;
+                        signedInUser = login.data.user;
                     }
+                    setCurrentUser(signedInUser);
+                    await initData();
+                    alert('注册成功，已自动登录。');
                 } catch (error) {
                     showError('注册失败', error);
                 } finally {
